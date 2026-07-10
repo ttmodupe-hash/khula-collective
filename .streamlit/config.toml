@@ -1,0 +1,25 @@
+[theme]
+primaryColor = "#00b894"
+backgroundColor = "#0a0a0a"
+secondaryBackgroundColor = "#1e1e30"
+textColor = "#ffffff"
+font = "sans serif"
+
+[server]
+headless = true
+enableCORS = false
+enableXsrfProtection = true
+maxUploadSize = 50
+
+[browser]
+gatherUsageStats = false
+
+[logger]
+level = "info"
+messageFormat = "%(asctime)s %(levelname)s %(name)s: %(message)s"
+
+[runner]
+magicEnabled = true
+
+[deprecation]
+showfileUploaderEncoding = false

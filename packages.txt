@@ -1,0 +1,10 @@
+# System dependencies for Streamlit Cloud
+libglib2.0-0
+libsm6
+libxext6
+libxrender-dev
+libgomp1
+libssl-dev
+ca-certificates
+fonts-liberation
+fontconfig

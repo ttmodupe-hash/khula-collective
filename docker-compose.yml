@@ -1,0 +1,20 @@
+version: "3.9"
+services:
+  khula-app:
+    build: {context: ., dockerfile: Dockerfile, target: production}
+    container_name: khula-collective
+    restart: unless-stopped
+    ports: ["8501:8501"]
+    volumes:
+      - khula-data:/app/data
+      - ./app.py:/app/app.py:ro
+      - ./.streamlit:/app/.streamlit:ro
+    environment:
+      - STREAMLIT_SERVER_HEADLESS=true
+      - STREAMLIT_SERVER_ENABLE_CORS=false
+      - STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
+    networks: [khula-network]
+volumes:
+  khula-data: {driver: local}
+networks:
+  khula-network: {driver: bridge}

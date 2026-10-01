@@ -44,6 +44,9 @@ openai>=1.0.0            # Optional: for advanced AI features
 pytesseract>=0.3.10      # OCR for ID document reading
 opencv-python>=4.8.0     # Image preprocessing for OCR
 
+# --- Bank Statement Parsing ---
+pdfplumber>=0.10.0       # PDF parsing for FNB bank statements
+
 # --- Global Market Data ---
 yfinance>=0.2.28         # Yahoo Finance for real-time stock/crypto prices
 

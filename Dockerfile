@@ -1,4 +1,4 @@
-# Khula Collective v3.0 — Railway Production Dockerfile
+# Khula Collective v4.0 — Railway Production Dockerfile
 FROM python:3.11-slim
 
 WORKDIR /app
@@ -21,6 +21,8 @@ COPY khula_utils.py .
 COPY khula_pages1.py .
 COPY khula_pages2.py .
 COPY khula_pages3.py .
+COPY khula_ai_engine.py .
+COPY khula_id_engine.py .
 COPY .streamlit/ .streamlit/
 
 # Create non-root user

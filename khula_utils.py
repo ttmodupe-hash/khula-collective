@@ -1,353 +1,533 @@
-def load_css(theme):
-    if theme == "dark":
-        return """
-        <style>
-            .stApp { background: #0a0a1a; color: #e0e0e0; }
-            .css-18e3th9 { padding: 0; }
-            h1, h2, h3, h4 { color: #f0f0f0; font-family: 'Inter', sans-serif; }
-            .stButton>button { background: #6366f1; color: white; border-radius: 12px; padding: 0.6rem 1.2rem; font-weight: 600; border: none; transition: all 0.3s; }
-            .stButton>button:hover { background: #4f46e5; transform: translateY(-2px); box-shadow: 0 8px 25px rgba(99,102,241,0.3); }
-            .metric-card { background: #1e1e3a; border-radius: 16px; padding: 1.5rem; border: 1px solid #2a2a50; margin: 0.5rem 0; }
-            .metric-value { font-size: 2rem; font-weight: 700; color: #6366f1; }
-            .metric-label { font-size: 0.875rem; color: #8892b0; text-transform: uppercase; letter-spacing: 1px; }
-            .feature-card { background: #1e1e3a; border-radius: 12px; padding: 1.5rem; border: 1px solid #2a2a50; margin: 0.5rem 0; transition: all 0.3s; cursor: pointer; }
-            .feature-card:hover { border-color: #6366f1; transform: translateY(-3px); box-shadow: 0 12px 30px rgba(99,102,241,0.15); }
-            .feature-icon { font-size: 2rem; margin-bottom: 0.5rem; }
-            .stTabs [data-baseweb="tab-list"] { gap: 8px; }
-            .stTabs [data-baseweb="tab"] { background: #1e1e3a; border-radius: 8px 8px 0 0; padding: 10px 20px; color: #8892b0; }
-            .stTabs [aria-selected="true"] { background: #6366f1 !important; color: white !important; }
-            .progress-bar { background: #2a2a50; border-radius: 10px; height: 8px; overflow: hidden; }
-            .progress-fill { background: #00b894; height: 100%; border-radius: 10px; transition: width 0.5s ease; }
-            .progress-fill.warning { background: #fdcb6e; }
-            .progress-fill.danger { background: #e74c3c; }
-            .notification-item { background: #1e1e3a; border-radius: 12px; padding: 1rem; margin: 0.5rem 0; border-left: 4px solid #6366f1; }
-            .notification-item.unread { border-left-color: #00b894; }
-            .mobile-nav { position: fixed; bottom: 0; left: 0; right: 0; background: #1e1e3a; border-top: 1px solid #2a2a50; padding: 0.8rem; display: flex; justify-content: space-around; z-index: 9999; }
-            .mobile-nav-item { text-align: center; color: #8892b0; font-size: 0.75rem; }
-            .mobile-nav-item.active { color: #6366f1; }
-            .stDataFrame { background: #1e1e3a; border-radius: 12px; }
-            div[data-testid="stSidebarNav"] { background: #0f0f23; }
-            .css-1d391kg { background: #0f0f23; }
-        </style>
-        """
-    else:
-        return """
-        <style>
-            .stApp { background: #f8fafc; color: #1e293b; }
-            h1, h2, h3, h4 { color: #0f172a; font-family: 'Inter', sans-serif; }
-            .stButton>button { background: #6366f1; color: white; border-radius: 12px; padding: 0.6rem 1.2rem; font-weight: 600; border: none; }
-            .metric-card { background: white; border-radius: 16px; padding: 1.5rem; border: 1px solid #e2e8f0; margin: 0.5rem 0; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-            .metric-value { font-size: 2rem; font-weight: 700; color: #6366f1; }
-            .metric-label { font-size: 0.875rem; color: #64748b; text-transform: uppercase; letter-spacing: 1px; }
-            .feature-card { background: white; border-radius: 12px; padding: 1.5rem; border: 1px solid #e2e8f0; margin: 0.5rem 0; }
-            .progress-bar { background: #e2e8f0; border-radius: 10px; height: 8px; overflow: hidden; }
-            .progress-fill { background: #00b894; height: 100%; border-radius: 10px; }
-            .mobile-nav { position: fixed; bottom: 0; left: 0; right: 0; background: white; border-top: 1px solid #e2e8f0; padding: 0.8rem; display: flex; justify-content: space-around; z-index: 9999; }
-        </style>
-        """
+import sqlite3
+import os
+import re
+from datetime import datetime, timedelta
+from passlib.hash import bcrypt
+import secrets
+import string
+import hashlib
+from collections import defaultdict
 
-class FNBAPIClient:
-    def __init__(self):
-        self.base_url = FNB_API_BASE
-        self.token = None
+# ============================================================
+# CONFIGURATION
+# ============================================================
 
-    def connect(self, client_id, client_secret):
-        if not client_id or not client_secret:
-            return False, "FNB credentials not configured. Set FNB_CLIENT_ID and FNB_CLIENT_SECRET environment variables."
-        self.token = f"simulated_token_{hashlib.sha256(f'{client_id}:{client_secret}'.encode()).hexdigest()[:16]}"
-        return True, "Connected to FNB Open Banking (Simulated)"
+DB_PATH = os.environ.get("KOPANO_DB_PATH", "/var/lib/kopano/kopano.db")
+UPLOAD_DIR = os.environ.get("KOPANO_UPLOAD_DIR", "/var/lib/kopano/uploads")
 
-    def get_transactions(self, account_id, start_date, end_date):
-        if not self.token:
-            return []
-        simulated = [
-            {"date": start_date, "description": "FNB Monthly Contribution", "amount": 500.00, "type": "credit", "reference": "SIM001"},
-            {"date": end_date, "description": "FNB Investment Dividend", "amount": 1250.00, "type": "credit", "reference": "SIM002"},
-            {"date": start_date, "description": "FNB Bank Charges", "amount": -45.00, "type": "debit", "reference": "SIM003"},
-        ]
-        return simulated
+# ============================================================
+# DATABASE SETUP / MIGRATION
+# ============================================================
 
-    def sync_contributions(self, user_id, transactions):
-        conn = sqlite3.connect(DB_PATH)
-        c = conn.cursor()
-        synced = 0
-        for tx in transactions:
-            if "contribution" in tx["description"].lower() and tx["type"] == "credit":
-                c.execute("INSERT INTO Monthly_Contributions (user_id, year, month, amount, status, payment_date) VALUES (?,?,?,?,?,?)",
-                          (user_id, datetime.now().year, datetime.now().month, tx["amount"], 'verified', tx["date"]))
-                synced += 1
-        conn.commit()
-        conn.close()
-        return synced
+def init_database():
+    """Ensure all required tables exist."""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+
+    # Users table
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS Users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            full_name TEXT NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            phone TEXT,
+            password_hash TEXT NOT NULL,
+            mpin_hash TEXT,
+            language TEXT DEFAULT 'en',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            is_active INTEGER DEFAULT 1,
+            is_admin INTEGER DEFAULT 0
+        )
+    """)
+
+    # Categories table
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS Categories (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            icon TEXT,
+            color TEXT,
+            is_system INTEGER DEFAULT 0,
+            created_by INTEGER,
+            FOREIGN KEY (created_by) REFERENCES Users(id)
+        )
+    """)
+
+    # Financial Accounts table
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS Financial_Accounts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            type TEXT NOT NULL, -- bank, mobile_money, cash, investment, credit
+            provider TEXT, -- FNB, Standard Bank, MTN MoMo, etc.
+            account_number TEXT,
+            currency TEXT DEFAULT 'ZAR',
+            balance REAL DEFAULT 0.0,
+            is_active INTEGER DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES Users(id)
+        )
+    """)
+
+    # Transactions table
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS Transactions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            account_id INTEGER,
+            category_id INTEGER,
+            type TEXT NOT NULL, -- income, expense, transfer
+            amount REAL NOT NULL,
+            description TEXT,
+            merchant TEXT,
+            transaction_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            is_recurring INTEGER DEFAULT 0,
+            recurring_period TEXT, -- daily, weekly, monthly, yearly
+            receipt_path TEXT,
+            notes TEXT,
+            FOREIGN KEY (user_id) REFERENCES Users(id),
+            FOREIGN KEY (account_id) REFERENCES Financial_Accounts(id),
+            FOREIGN KEY (category_id) REFERENCES Categories(id)
+        )
+    """)
+
+    # Budgets table
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS Budgets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            category_id INTEGER,
+            amount REAL NOT NULL,
+            period TEXT NOT NULL, -- weekly, monthly, yearly
+            start_date TIMESTAMP,
+            end_date TIMESTAMP,
+            alert_threshold REAL DEFAULT 80.0,
+            is_active INTEGER DEFAULT 1,
+            FOREIGN KEY (user_id) REFERENCES Users(id),
+            FOREIGN KEY (category_id) REFERENCES Categories(id)
+        )
+    """)
+
+    # Savings Goals table
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS Savings_Goals (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            target_amount REAL NOT NULL,
+            current_amount REAL DEFAULT 0.0,
+            deadline TIMESTAMP,
+            is_active INTEGER DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES Users(id)
+        )
+    """)
+
+    # AI Conversations table
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS AI_Conversations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            question TEXT NOT NULL,
+            response TEXT NOT NULL,
+            context TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES Users(id)
+        )
+    """)
+
+    # Notifications table
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS Notifications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            message TEXT NOT NULL,
+            type TEXT DEFAULT 'info', -- info, warning, success, error
+            is_read INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES Users(id)
+        )
+    """)
+
+    # Insert default categories if not exist
+    default_categories = [
+        ("Food & Dining", "utensils", "#FF6B6B", 1),
+        ("Transportation", "car", "#4ECDC4", 1),
+        ("Shopping", "shopping-bag", "#45B7D1", 1),
+        ("Entertainment", "film", "#96CEB4", 1),
+        ("Bills & Utilities", "zap", "#FFEAA7", 1),
+        ("Healthcare", "heart-pulse", "#DDA0DD", 1),
+        ("Education", "book-open", "#98D8C8", 1),
+        ("Income", "trending-up", "#2ECC71", 1),
+        ("Savings", "piggy-bank", "#F39C12", 1),
+        ("Investments", "bar-chart-2", "#9B59B6", 1),
+    ]
+    for cat in default_categories:
+        c.execute("SELECT id FROM Categories WHERE name = ?", (cat[0],))
+        if not c.fetchone():
+            c.execute(
+                "INSERT INTO Categories (name, icon, color, is_system) VALUES (?, ?, ?, ?)",
+                cat
+            )
+
+    conn.commit()
+    conn.close()
+
+# ============================================================
+# AUTHENTICATION HELPERS
+# ============================================================
 
 def hash_password(password):
-    return hashlib.sha256(password.encode()).hexdigest()
+    return bcrypt.hash(password)
 
-def authenticate(username, password):
+def verify_password(password, hashed):
+    return bcrypt.verify(password, hashed)
+
+def generate_secure_token(length=32):
+    alphabet = string.ascii_letters + string.digits
+    return ''.join(secrets.choice(alphabet) for _ in range(length))
+
+def generate_mpin():
+    """Generate a random 5-digit MPIN."""
+    return ''.join(secrets.choice(string.digits) for _ in range(5))
+
+# ============================================================
+# USER MANAGEMENT
+# ============================================================
+
+def create_user(full_name, email, phone, password, mpin=None, language='en'):
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    c.execute("SELECT user_id, username, full_name, role, theme_preference FROM Users WHERE username=? AND password_hash=? AND is_active=1",
-              (username, hash_password(password)))
-    user = c.fetchone()
+    try:
+        password_hash = hash_password(password)
+        mpin_hash = hash_password(mpin) if mpin else None
+        c.execute("""
+            INSERT INTO Users (full_name, email, phone, password_hash, mpin_hash, language)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (full_name, email, phone, password_hash, mpin_hash, language))
+        conn.commit()
+        return c.lastrowid
+    except sqlite3.IntegrityError:
+        return None
+    finally:
+        conn.close()
+
+def authenticate_user(email, password):
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT id, password_hash, full_name, is_admin FROM Users WHERE email = ? AND is_active = 1", (email,))
+    row = c.fetchone()
     conn.close()
-    if user:
-        return {"user_id": user[0], "username": user[1], "full_name": user[2], "role": user[3], "theme": user[4]}
+    if row and verify_password(password, row[1]):
+        return {"id": row[0], "name": row[2], "is_admin": bool(row[3])}
     return None
 
-def add_notification(user_id, title, message, notif_type="info"):
+def authenticate_mpin(user_id, mpin):
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    c.execute("INSERT INTO Notifications (user_id, title, message, type) VALUES (?,?,?,?)", (user_id, title, message, notif_type))
-    conn.commit()
+    c.execute("SELECT mpin_hash FROM Users WHERE id = ? AND is_active = 1", (user_id,))
+    row = c.fetchone()
     conn.close()
+    if row and row[0] and verify_password(mpin, row[0]):
+        return True
+    return False
 
-def get_notifications(user_id):
+def get_user_by_id(user_id):
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    c.execute("SELECT notification_id, title, message, type, is_read, created_at FROM Notifications WHERE user_id=? ORDER BY created_at DESC LIMIT 20", (user_id,))
-    rows = c.fetchall()
+    c.execute("SELECT id, full_name, email, phone, language, is_admin, created_at FROM Users WHERE id = ?", (user_id,))
+    row = c.fetchone()
     conn.close()
-    return rows
-
-def mark_notification_read(notification_id):
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("UPDATE Notifications SET is_read=1 WHERE notification_id=?", (notification_id,))
-    conn.commit()
-    conn.close()
-
-def toggle_theme(user_id, current_theme):
-    new_theme = "light" if current_theme == "dark" else "dark"
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("UPDATE Users SET theme_preference=? WHERE user_id=?", (new_theme, user_id))
-    conn.commit()
-    conn.close()
-    return new_theme
-
-def track_feature_usage(user_id, feature_id):
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("INSERT INTO Feature_Usage (user_id, feature_id) VALUES (?,?)", (user_id, feature_id))
-    conn.commit()
-    conn.close()
-
-def get_feature_usage_stats(user_id):
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("SELECT feature_id, COUNT(*) FROM Feature_Usage WHERE user_id=? GROUP BY feature_id", (user_id,))
-    rows = c.fetchall()
-    conn.close()
-    return {r[0]: r[1] for r in rows}
+    if row:
+        return {
+            "id": row[0], "full_name": row[1], "email": row[2],
+            "phone": row[3], "language": row[4], "is_admin": bool(row[5]),
+            "created_at": row[6]
+        }
+    return None
 
 # ============================================================
-# STATEMENT PARSER (v3.1)
+# ACCOUNT MANAGEMENT
 # ============================================================
 
-def parse_pdf_statement(pdf_file, user_id):
-    """Parse FNB PDF bank statement and extract transactions.
-    Returns list of dicts: {date, description, amount, type, reference}
+def add_account(user_id, name, acc_type, provider=None, account_number=None, currency='ZAR', balance=0.0):
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("""
+        INSERT INTO Financial_Accounts (user_id, name, type, provider, account_number, currency, balance)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (user_id, name, acc_type, provider, account_number, currency, balance))
+    conn.commit()
+    acc_id = c.lastrowid
+    conn.close()
+    return acc_id
+
+def get_user_accounts(user_id):
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("""
+        SELECT id, name, type, provider, account_number, currency, balance, is_active, created_at
+        FROM Financial_Accounts WHERE user_id = ? ORDER BY created_at DESC
+    """, (user_id,))
+    rows = c.fetchall()
+    conn.close()
+    accounts = []
+    for row in rows:
+        accounts.append({
+            "id": row[0], "name": row[1], "type": row[2], "provider": row[3],
+            "account_number": row[4], "currency": row[5], "balance": row[6],
+            "is_active": bool(row[7]), "created_at": row[8]
+        })
+    return accounts
+
+def update_account_balance(account_id, new_balance):
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("UPDATE Financial_Accounts SET balance = ? WHERE id = ?", (new_balance, account_id))
+    conn.commit()
+    conn.close()
+
+# ============================================================
+# TRANSACTION MANAGEMENT
+# ============================================================
+
+def add_transaction(user_id, account_id, category_id, t_type, amount, description=None,
+                    merchant=None, transaction_date=None, is_recurring=0,
+                    recurring_period=None, receipt_path=None, notes=None):
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    if transaction_date is None:
+        transaction_date = datetime.now().isoformat()
+    c.execute("""
+        INSERT INTO Transactions
+        (user_id, account_id, category_id, type, amount, description, merchant,
+         transaction_date, is_recurring, recurring_period, receipt_path, notes)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (user_id, account_id, category_id, t_type, amount, description, merchant,
+          transaction_date, is_recurring, recurring_period, receipt_path, notes))
+    conn.commit()
+    tx_id = c.lastrowid
+
+    # Update account balance
+    if account_id:
+        c.execute("SELECT balance FROM Financial_Accounts WHERE id = ?", (account_id,))
+        row = c.fetchone()
+        if row:
+            current_balance = row[0] or 0.0
+            if t_type == 'income':
+                new_balance = current_balance + amount
+            elif t_type == 'expense':
+                new_balance = current_balance - amount
+            else:
+                new_balance = current_balance
+            c.execute("UPDATE Financial_Accounts SET balance = ? WHERE id = ?", (new_balance, account_id))
+            conn.commit()
+
+    conn.close()
+    return tx_id
+
+def get_transactions(user_id, limit=50, offset=0, account_id=None, category_id=None,
+                     t_type=None, start_date=None, end_date=None):
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    query = """
+        SELECT t.id, t.account_id, t.category_id, t.type, t.amount, t.description,
+               t.merchant, t.transaction_date, t.is_recurring, t.recurring_period,
+               t.receipt_path, t.notes,
+               a.name as account_name, c.name as category_name, c.color as category_color
+        FROM Transactions t
+        LEFT JOIN Financial_Accounts a ON t.account_id = a.id
+        LEFT JOIN Categories c ON t.category_id = c.id
+        WHERE t.user_id = ?
     """
-    import pdfplumber
-    import re
+    params = [user_id]
+    if account_id:
+        query += " AND t.account_id = ?"
+        params.append(account_id)
+    if category_id:
+        query += " AND t.category_id = ?"
+        params.append(category_id)
+    if t_type:
+        query += " AND t.type = ?"
+        params.append(t_type)
+    if start_date:
+        query += " AND t.transaction_date >= ?"
+        params.append(start_date)
+    if end_date:
+        query += " AND t.transaction_date <= ?"
+        params.append(end_date)
+    query += " ORDER BY t.transaction_date DESC LIMIT ? OFFSET ?"
+    params.extend([limit, offset])
+    c.execute(query, params)
+    rows = c.fetchall()
+    conn.close()
     transactions = []
-    with pdfplumber.open(pdf_file) as pdf:
-        for page in pdf.pages:
-            text = page.extract_text()
-            if text:
-                lines = text.split('\n')
-                for line in lines:
-                    # Match date at start: DD MMM YYYY or DD/MM/YYYY
-                    date_match = re.search(r'(\d{2}\s+[A-Za-z]{3}\s+\d{4}|\d{2}/\d{2}/\d{4})', line)
-                    # Match amount (R xxx.xx or just xxx.xx)
-                    amount_match = re.search(r'([\d,]+\.\d{2})', line)
-                    if date_match and amount_match:
-                        # Determine if debit or credit
-                        tx_type = "debit" if any(kw in line.lower() for kw in ["debit", "dr", "fee", "charge", "withdrawal"]) else "credit"
-                        # Extract description (between date and amount)
-                        desc = line[date_match.end():amount_match.start()].strip()
-                        if len(desc) < 3:
-                            desc = "Unknown Transaction"
-                        transactions.append({
-                            "date": date_match.group(1),
-                            "description": desc[:100],
-                            "amount": float(amount_match.group(1).replace(",", "")),
-                            "type": tx_type,
-                            "reference": f"STMT{hashlib.sha256(line.encode()).hexdigest()[:8].upper()}"
-                        })
-    return transactions
-
-def parse_csv_statement(csv_file, user_id):
-    """Parse FNB CSV bank statement. Returns list of transaction dicts."""
-    import pandas as pd
-    df = pd.read_csv(csv_file)
-    transactions = []
-    # Try common FNB CSV column names
-    date_col = next((c for c in df.columns if 'date' in c.lower()), df.columns[0])
-    desc_col = next((c for c in df.columns if any(x in c.lower() for x in ['desc', 'narrative', 'detail'])), df.columns[1])
-    amount_col = next((c for c in df.columns if 'amount' in c.lower()), None)
-    debit_col = next((c for c in df.columns if 'debit' in c.lower()), None)
-    credit_col = next((c for c in df.columns if 'credit' in c.lower()), None)
-
-    for _, row in df.iterrows():
-        desc = str(row.get(desc_col, ""))
-        if pd.isna(desc) or desc.strip() == "":
-            continue
-
-        if amount_col and not pd.isna(row.get(amount_col)):
-            amount = abs(float(row[amount_col]))
-            tx_type = "debit" if float(row[amount_col]) < 0 else "credit"
-        elif debit_col and not pd.isna(row.get(debit_col)) and float(row[debit_col]) > 0:
-            amount = float(row[debit_col])
-            tx_type = "debit"
-        elif credit_col and not pd.isna(row.get(credit_col)) and float(row[credit_col]) > 0:
-            amount = float(row[credit_col])
-            tx_type = "credit"
-        else:
-            continue
-
+    for row in rows:
         transactions.append({
-            "date": str(row.get(date_col, datetime.now().strftime("%Y-%m-%d"))),
-            "description": desc[:100],
-            "amount": amount,
-            "type": tx_type,
-            "reference": f"CSV{hashlib.sha256(str(row).encode()).hexdigest()[:8].upper()}"
+            "id": row[0], "account_id": row[1], "category_id": row[2], "type": row[3],
+            "amount": row[4], "description": row[5], "merchant": row[6],
+            "transaction_date": row[7], "is_recurring": bool(row[8]),
+            "recurring_period": row[9], "receipt_path": row[10], "notes": row[11],
+            "account_name": row[12], "category_name": row[13], "category_color": row[14]
         })
     return transactions
 
-def categorize_transaction(description, amount, tx_type):
-    """Categorize a transaction based on description keywords."""
-    desc_lower = description.lower()
-
-    contribution_keywords = ["khula", "stokvel", "contribution", "monthly payment", "club", "collective", "pool"]
-    income_keywords = ["salary", "wage", "deposit", "transfer in", "payment received"]
-    investment_keywords = ["investment", "buy", "purchase", "dividend", "interest"]
-    expense_keywords = ["shop", "store", "restaurant", "fuel", "petrol", "uber", "takealot", "checkers", "woolworths"]
-    fee_keywords = ["fee", "charge", "commission", "bank charge", "service fee"]
-
-    if any(kw in desc_lower for kw in contribution_keywords):
-        return "contribution"
-    elif any(kw in desc_lower for kw in income_keywords):
-        return "income"
-    elif any(kw in desc_lower for kw in investment_keywords):
-        return "investment"
-    elif any(kw in desc_lower for kw in expense_keywords):
-        return "expense"
-    elif any(kw in desc_lower for kw in fee_keywords):
-        return "fee"
-    elif tx_type == "credit":
-        return "income"
+def get_transaction_summary(user_id, period='month'):
+    """Get income vs expense summary for a period."""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    now = datetime.now()
+    if period == 'week':
+        start = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0)
+    elif period == 'month':
+        start = now.replace(day=1, hour=0, minute=0, second=0)
+    elif period == 'year':
+        start = now.replace(month=1, day=1, hour=0, minute=0, second=0)
     else:
-        return "expense"
+        start = now.replace(day=1, hour=0, minute=0, second=0)
 
-def save_parsed_transactions(user_id, transactions, source="statement_upload"):
-    """Save parsed transactions to Bank_Transactions table."""
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    saved = 0
-    for tx in transactions:
-        category = categorize_transaction(tx["description"], tx["amount"], tx["type"])
-        # Check for duplicates by reference
-        c.execute("SELECT COUNT(*) FROM Bank_Transactions WHERE user_id=? AND reference=?", (user_id, tx["reference"]))
-        if c.fetchone()[0] == 0:
-            c.execute("""
-                INSERT INTO Bank_Transactions (user_id, transaction_date, description, amount, type, reference, category, synced_from)
-                VALUES (?,?,?,?,?,?,?,?)
-            """, (user_id, tx["date"], tx["description"], tx["amount"], tx["type"], tx["reference"], category, source))
-            saved += 1
-    conn.commit()
-    conn.close()
-    return saved
-
-def get_user_statement_summary(user_id):
-    """Get summary of user's bank transactions for AI context."""
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-
-    # Total income vs expenses
-    c.execute("SELECT COALESCE(SUM(amount), 0) FROM Bank_Transactions WHERE user_id=? AND type='credit'", (user_id,))
-    total_income = c.fetchone()[0] or 0
-    c.execute("SELECT COALESCE(SUM(amount), 0) FROM Bank_Transactions WHERE user_id=? AND type='debit'", (user_id,))
-    total_expenses = c.fetchone()[0] or 0
-
-    # Category breakdown
-    c.execute("SELECT category, COALESCE(SUM(amount), 0), COUNT(*) FROM Bank_Transactions WHERE user_id=? GROUP BY category", (user_id,))
-    categories = c.fetchall()
-
-    # Recent contributions detected
-    c.execute("SELECT COALESCE(SUM(amount), 0), COUNT(*) FROM Bank_Transactions WHERE user_id=? AND category='contribution'", (user_id,))
-    contrib_data = c.fetchone()
-
-    # Monthly trend (last 3 months)
     c.execute("""
-        SELECT strftime('%Y-%m', transaction_date) as month,
-               COALESCE(SUM(CASE WHEN type='credit' THEN amount ELSE 0 END), 0) as income,
-               COALESCE(SUM(CASE WHEN type='debit' THEN amount ELSE 0 END), 0) as expense
-        FROM Bank_Transactions
-        WHERE user_id=? AND transaction_date >= date('now', '-3 months')
-        GROUP BY month ORDER BY month DESC LIMIT 3
-    """, (user_id,))
-    monthly_trend = c.fetchall()
-
-    conn.close()
-    return {
-        "total_income": total_income,
-        "total_expenses": total_expenses,
-        "net_flow": total_income - total_expenses,
-        "categories": categories,
-        "contributions_detected": contrib_data[0] if contrib_data else 0,
-        "contribution_count": contrib_data[1] if contrib_data else 0,
-        "monthly_trend": monthly_trend
-    }
-
-def get_ai_context(user_id):
-    """Build rich context for AI advisor based on user's data."""
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-
-    # User profile
-    c.execute("SELECT full_name, monthly_contribution, risk_profile FROM Users WHERE user_id=?", (user_id,))
-    user = c.fetchone()
-
-    # Portfolio
-    c.execute("SELECT COALESCE(SUM(current_value), 0) FROM Investments")
-    portfolio_value = c.fetchone()[0] or 0
-
-    # Contribution status
-    current_year = datetime.now().year
-    current_month = datetime.now().month
-    c.execute("SELECT COALESCE(SUM(amount), 0) FROM Monthly_Contributions WHERE user_id=? AND year=? AND month=?", (user_id, current_year, current_month))
-    this_month_contrib = c.fetchone()[0] or 0
-
-    # Statement summary
-    stmt_summary = get_user_statement_summary(user_id)
-
-    conn.close()
-
-    return {
-        "user_name": user[0] if user else "Member",
-        "monthly_target": user[1] if user else 500,
-        "risk_profile": user[2] if user else "moderate",
-        "portfolio_value": portfolio_value,
-        "this_month_contrib": this_month_contrib,
-        "statement_summary": stmt_summary
-    }
-
-def save_ai_conversation(user_id, question, response, context):
-    """Save AI conversation to database."""
-    import json
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("INSERT INTO AI_Conversations (user_id, question, response, context_data) VALUES (?,?,?,?)",
-              (user_id, question, response, json.dumps(context)))
-    conn.commit()
-    conn.close()
-
-def get_ai_conversation_history(user_id, limit=10):
-    """Get recent AI conversations for context."""
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("SELECT question, response, created_at FROM AI_Conversations WHERE user_id=? ORDER BY created_at DESC LIMIT ?", (user_id, limit))
+        SELECT type, SUM(amount) FROM Transactions
+        WHERE user_id = ? AND transaction_date >= ?
+        GROUP BY type
+    """, (user_id, start.isoformat()))
     rows = c.fetchall()
     conn.close()
-    return rows
+    summary = {"income": 0.0, "expense": 0.0, "net": 0.0}
+    for row in rows:
+        if row[0] == 'income':
+            summary["income"] = row[1] or 0.0
+        elif row[0] == 'expense':
+            summary["expense"] = row[1] or 0.0
+    summary["net"] = summary["income"] - summary["expense"]
+    return summary
+
+# ============================================================
+# BUDGET MANAGEMENT
+# ============================================================
+
+def create_budget(user_id, category_id, amount, period='monthly', start_date=None,
+                  end_date=None, alert_threshold=80.0):
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    if start_date is None:
+        start_date = datetime.now().isoformat()
+    c.execute("""
+        INSERT INTO Budgets (user_id, category_id, amount, period, start_date, end_date, alert_threshold)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (user_id, category_id, amount, period, start_date, end_date, alert_threshold))
+    conn.commit()
+    budget_id = c.lastrowid
+    conn.close()
+    return budget_id
+
+def get_budgets(user_id):
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("""
+        SELECT b.id, b.category_id, b.amount, b.period, b.start_date, b.end_date,
+               b.alert_threshold, b.is_active, c.name as category_name, c.color as category_color
+        FROM Budgets b
+        LEFT JOIN Categories c ON b.category_id = c.id
+        WHERE b.user_id = ? AND b.is_active = 1
+    """, (user_id,))
+    rows = c.fetchall()
+    conn.close()
+    budgets = []
+    for row in rows:
+        budgets.append({
+            "id": row[0], "category_id": row[1], "amount": row[2], "period": row[3],
+            "start_date": row[4], "end_date": row[5], "alert_threshold": row[6],
+            "is_active": bool(row[7]), "category_name": row[8], "category_color": row[9]
+        })
+    return budgets
+
+def get_budget_usage(user_id, budget_id):
+    """Calculate how much of a budget has been used."""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT category_id, amount, start_date FROM Budgets WHERE id = ? AND user_id = ?",
+              (budget_id, user_id))
+    row = c.fetchone()
+    if not row:
+        conn.close()
+        return None
+    category_id, amount, start_date = row
+    c.execute("""
+        SELECT SUM(amount) FROM Transactions
+        WHERE user_id = ? AND category_id = ? AND type = 'expense' AND transaction_date >= ?
+    """, (user_id, category_id, start_date))
+    spent = c.fetchone()[0] or 0.0
+    conn.close()
+    percentage = (spent / amount * 100) if amount > 0 else 0
+    return {"spent": spent, "budget": amount, "remaining": amount - spent,
+            "percentage": round(percentage, 2)}
+
+# ============================================================
+# SAVINGS GOALS
+# ============================================================
+
+def create_savings_goal(user_id, name, target_amount, deadline=None):
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("""
+        INSERT INTO Savings_Goals (user_id, name, target_amount, deadline)
+        VALUES (?, ?, ?, ?)
+    """, (user_id, name, target_amount, deadline))
+    conn.commit()
+    goal_id = c.lastrowid
+    conn.close()
+    return goal_id
+
+def get_savings_goals(user_id):
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("""
+        SELECT id, name, target_amount, current_amount, deadline, is_active, created_at
+        FROM Savings_Goals WHERE user_id = ? AND is_active = 1
+    """, (user_id,))
+    rows = c.fetchall()
+    conn.close()
+    goals = []
+    for row in rows:
+        percentage = (row[3] / row[2] * 100) if row[2] > 0 else 0
+        goals.append({
+            "id": row[0], "name": row[1], "target_amount": row[2],
+            "current_amount": row[3], "deadline": row[4], "is_active": bool(row[5]),
+            "created_at": row[6], "percentage": round(percentage, 2)
+        })
+    return goals
+
+def update_savings_goal(goal_id, user_id, amount_to_add):
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT current_amount FROM Savings_Goals WHERE id = ? AND user_id = ?",
+              (goal_id, user_id))
+    row = c.fetchone()
+    if row:
+        new_amount = row[0] + amount_to_add
+        c.execute("UPDATE Savings_Goals SET current_amount = ? WHERE id = ?",
+                  (new_amount, goal_id))
+        conn.commit()
+    conn.close()
+
+# ============================================================
+# STATEMENT PARSING (FNB, Standard Bank, Capitec)
+# ============================================================
+
+def parse_bank_statement(user_id, account_id, statement_text, bank_type='fnb'):
+    """
+    Parse bank statement text and extract transactions.
+    Supports: 'fnb', 'standard_bank', 'capitec'
+    """
+    transactions = []
+    lines = statement_text.split('\n')
+
+    if bank_type.lower() == 'fnb':
+        for line in lines:
+            # Try to match transaction lines with amounts
+
+# KHULA_APPEND_MARKER_7a3f9e2d

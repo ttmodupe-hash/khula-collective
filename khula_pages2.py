@@ -70,6 +70,99 @@ def render_feature_discovery():
         st.info("No usage data yet")
 
 # ============================================================
+# FNB API GUIDE
+# ============================================================
+def render_fnb_api_guide():
+    track_feature_usage(st.session_state.user_id, "fnb_api_guide")
+    st.markdown("<h2>🏦 FNB API Access Guide</h2>", unsafe_allow_html=True)
+
+    st.markdown("""
+    <div style='background: #1e1e3a; padding: 1.5rem; border-radius: 12px; border: 1px solid #2a2a50; margin-bottom: 1.5rem;'>
+        <h3 style='color: #00b894; margin-top: 0;'>Current Status: Statement Upload Mode ✅</h3>
+        <p style='color: #e0e0e0;'>Your club can already generate reports from uploaded FNB statements (PDF/CSV).
+        This guide explains how to get <strong>real-time API access</strong> for automatic sync.</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("<h3>🚪 Step 1: Register a Business Entity</h3>", unsafe_allow_html=True)
+    st.markdown("""
+    FNB does not offer self-serve developer APIs for personal transaction history.
+    You need a **registered business or trust** to apply:
+    - Register your stokvel/investment club as a **stokvel association** or **private company**
+    - Obtain a tax number from SARS
+    - Open a **FNB Business Account** (or ensure your club banks with FNB)
+    """, unsafe_allow_html=True)
+
+    st.markdown("<h3>📝 Step 2: Contact FNB Business Solutions</h3>", unsafe_allow_html=True)
+    st.markdown("""
+    Reach out to FNB via:
+    - **Email:** business@fnb.co.za
+    - **Phone:** 087 575 9404 (Business Banking)
+    - **Branch:** Visit your relationship manager
+
+    Request access to **FNB Open Banking / API Services** for:
+    - Account information (read-only transaction history)
+    - Payment initiation (optional, for automated contributions)
+    """, unsafe_allow_html=True)
+
+    st.markdown("<h3>📋 Step 3: Submit Application</h3>", unsafe_allow_html=True)
+    st.markdown("""
+    FNB will require:
+    1. **Business registration documents** (CIPC certificate)
+    2. **FICA compliance** (ID copies, proof of address for all signatories)
+    3. **Tax clearance certificate** (SARS)
+    4. **API use case description** (explain you're building an investment club management tool)
+    5. **Data protection plan** (how you'll secure member transaction data)
+    6. **Expected transaction volume** (monthly API call estimates)
+    """, unsafe_allow_html=True)
+
+    st.markdown("<h3>⏱️ Step 4: Wait for Approval</h3>", unsafe_allow_html=True)
+    st.markdown("""
+    - Approval typically takes **4–8 weeks**
+    - FNB will provide **sandbox credentials** first for testing
+    - After successful UAT, you'll receive **production API keys**
+    - You'll need to sign an **API Service Agreement** with liability clauses
+    """, unsafe_allow_html=True)
+
+    st.markdown("<h3>⚡ Alternative: Bank Aggregator (Faster)</h3>", unsafe_allow_html=True)
+    st.markdown("""
+    While waiting for direct FNB API approval, consider these SA fintech aggregators:
+
+    | Provider | FNB Support | Setup Time | Cost |
+    |----------|------------|------------|------|
+    | **Banklink** | ✅ Live | 1–2 weeks | From R500/mo |
+    | **Ozow** | ✅ Live | 1–2 weeks | Per-transaction |
+    | **Stitch** | ✅ Available | 1–2 weeks | Developer-friendly |
+    | **Investec Programmable Banking** | ✅ Direct API | 2–3 weeks | Free for devs |
+
+    These providers already have FNB partnerships and can provide transaction data via their APIs.
+    """, unsafe_allow_html=True)
+
+    st.markdown("<h3>🔐 Security Requirements</h3>", unsafe_allow_html=True)
+    st.markdown("""
+    Before handling real banking data, ensure:
+    - **HTTPS only** (SSL certificate installed)
+    - **AES-256 encryption** for data at rest
+    - **OAuth 2.0** for API authentication
+    - **PCI-DSS compliance** if handling card data
+    - **POPIA compliance** (South Africa's data protection law)
+    - Regular **penetration testing** and security audits
+    """, unsafe_allow_html=True)
+
+    st.markdown("<h3>🛠️ What We Need From You</h3>", unsafe_allow_html=True)
+    st.markdown("""
+    Once you have API credentials, simply add them as environment variables in Railway:
+    ```
+    FNB_CLIENT_ID=your_client_id
+    FNB_CLIENT_SECRET=your_client_secret
+    FNB_API_BASE=https://api.fnb.co.za/openbanking/v1
+    ```
+    The app will automatically switch from **Statement Upload Mode** to **Live API Mode**.
+    """, unsafe_allow_html=True)
+
+    st.info("💡 **Tip:** For now, the statement upload feature gives you 90% of the value. Upload PDFs or CSVs from FNB Online Banking and the app will auto-parse transactions, categorize spending, and generate reports.")
+
+# ============================================================
 # MEMBER VOICE
 # ============================================================
 def render_member_voice():

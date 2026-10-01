@@ -229,5 +229,150 @@ def ai_portfolio_suggestion(user_profile, market="all", top_n=5):
         return []
 
     # Risk level filtering
+    risk_allowed = {"conservative": ["low"], "moderate": ["low", "medium"], "aggressive": ["low", "medium", "high"]}
+    allowed_risks = risk_allowed.get(risk_profile, ["low", "medium"])
 
-# KHULA_APPEND_MARKER_7a3f9e2d
+    # Get risk profile from user_profile
+    risk_profile = user_profile.get("risk_tolerance", "moderate").lower()
+
+    # Filter rows by risk (simulated: even=low, odd=medium)
+    filtered = []
+    for idx, row in enumerate(rows):
+        simulated_risk = "low" if idx % 2 == 0 else "medium"
+        if simulated_risk in allowed_risks:
+            filtered.append(row)
+
+    # Sort by simulated potential return (descending)
+    filtered.sort(key=lambda x: x[3], reverse=True)
+
+    recommendations = []
+    for row in filtered[:top_n]:
+        ticker, market, country, price = row
+        rec = {
+            "ticker": ticker,
+            "market": market,
+            "country": country,
+            "current_price": price,
+            "risk_level": "low" if filtered.index(row) % 2 == 0 else "medium",
+            "potential_return_pct": round(5 + (filtered.index(row) * 2.5), 2),
+            "currency": "ZAR" if country == "South Africa" else "USD",
+            "min_investment_amount": 100,
+            "is_actionable": 1
+        }
+        recommendations.append(rec)
+
+    return recommendations
+
+def store_portfolio_suggestion(user_id, suggestions):
+    """Store multiple portfolio suggestions for a user."""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    for rec in suggestions:
+        c.execute(f"""
+            INSERT INTO {RECOMMENDATIONS_TABLE}
+            (user_id, ticker, market, country, recommendation_type, target_price, risk_level, confidence, currency, is_actionable, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            user_id,
+            rec["ticker"],
+            rec.get("market"),
+            rec.get("country"),
+            "portfolio_suggestion",
+            rec.get("current_price"),
+            rec["risk_level"],
+            "medium",
+            rec.get("currency"),
+            rec["is_actionable"],
+            datetime.now().isoformat()
+        ))
+    conn.commit()
+    conn.close()
+    print(f"[Khula AI Engine] Stored {len(suggestions)} portfolio suggestions for {user_id}")
+
+# --- Notification & Alert System ---
+def send_price_alert(user_id, ticker, target_price, current_price, market, channel="whatsapp"):
+    """Send a price alert to the user via preferred channel."""
+    message = (f"🚨 Khula Price Alert: {ticker} ({market}) is now at {current_price}! "
+               f"Your target was {target_price}.")
+    if channel == "whatsapp":
+        send_whatsapp_message(user_id, message)
+    elif channel == "sms":
+        send_sms_message(user_id, message)
+    else:
+        print(f"[Khula AI Engine] Alert for {user_id}: {message}")
+
+def notify_new_recommendation(user_id, recommendation, channel="whatsapp"):
+    """Notify user about a new recommendation."""
+    msg = (f"📊 New Khula Recommendation: {recommendation['ticker']} ({recommendation['market']}) - "
+           f"{recommendation['recommendation_type'].upper()} | Risk: {recommendation['risk_level']} | "
+           f"Confidence: {recommendation['confidence']}")
+    if channel == "whatsapp":
+        send_whatsapp_message(user_id, msg)
+    elif channel == "sms":
+        send_sms_message(user_id, msg)
+    else:
+        print(f"[Khula AI Engine] Notification for {user_id}: {msg}")
+
+# --- Batch Operations ---
+def batch_update_market_prices(price_list):
+    """
+    Batch update market prices.
+    price_list: list of dicts with keys ticker, market, country, current_price
+    """
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    for item in price_list:
+        c.execute(f"""
+            INSERT INTO {MARKET_TABLE} (ticker, market, country, current_price, last_updated)
+            VALUES (?, ?, ?, ?, ?)
+        """, (item["ticker"], item["market"], item.get("country"), item["current_price"], datetime.now().isoformat()))
+    conn.commit()
+    conn.close()
+    print(f"[Khula AI Engine] Batch updated {len(price_list)} market prices.")
+
+def batch_store_recommendations(user_id, recommendations):
+    """Store multiple recommendations at once."""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    for rec in recommendations:
+        c.execute(f"""
+            INSERT INTO {RECOMMENDATIONS_TABLE}
+            (user_id, ticker, market, country, recommendation_type, target_price, risk_level, confidence, currency, is_actionable, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            user_id,
+            rec["ticker"],
+            rec.get("market"),
+            rec.get("country"),
+            rec.get("recommendation_type", "buy"),
+            rec.get("target_price"),
+            rec.get("risk_level", "medium"),
+            rec.get("confidence", "medium"),
+            rec.get("currency"),
+            rec.get("is_actionable", 1),
+            datetime.now().isoformat()
+        ))
+    conn.commit()
+    conn.close()
+    print(f"[Khula AI Engine] Batch stored {len(recommendations)} recommendations for {user_id}")
+
+# --- Utility Functions ---
+def hash_user_id(user_id):
+    """Hash a user ID for privacy."""
+    return hashlib.sha256(user_id.encode()).hexdigest()[:16]
+
+def get_db_summary():
+    """Return a summary of the database contents."""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute(f"SELECT COUNT(*) FROM {MARKET_TABLE}")
+    market_count = c.fetchone()[0]
+    c.execute(f"SELECT COUNT(*) FROM {RECOMMENDATIONS_TABLE}")
+    rec_count = c.fetchone()[0]
+    conn.close()
+    return {"market_entries": market_count, "recommendation_entries": rec_count}
+
+# --- Main Entry Point ---
+if __name__ == "__main__":
+    init_market_db()
+    print("[Khula AI Engine v4.0] Database initialized. Ready for market intelligence.")

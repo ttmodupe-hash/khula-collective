@@ -313,3 +313,46 @@ def get_ai_context(user_id):
     
     # Portfolio
     c.execute("SELECT COALESCE(SUM(current_value), 0) FROM Investments")
+    portfolio_value = c.fetchone()[0] or 0
+    
+    # Contribution status
+    current_year = datetime.now().year
+    current_month = datetime.now().month
+    c.execute("SELECT COALESCE(SUM(amount), 0) FROM Monthly_Contributions WHERE user_id=? AND year=? AND month=?", (user_id, current_year, current_month))
+    this_month_contrib = c.fetchone()[0] or 0
+    
+    # Statement summary
+    stmt_summary = get_user_statement_summary(user_id)
+    
+    conn.close()
+    
+    return {
+        "user_name": user[0] if user else "Member",
+        "monthly_target": user[1] if user else 500,
+        "risk_profile": user[2] if user else "moderate",
+        "portfolio_value": portfolio_value,
+        "this_month_contrib": this_month_contrib,
+        "statement_summary": stmt_summary
+    }
+
+def save_ai_conversation(user_id, question, response, context):
+    """Save AI conversation to database."""
+    import json
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("INSERT INTO AI_Conversations (user_id, question, response, context_data) VALUES (?,?,?,?)",
+              (user_id, question, response, json.dumps(context)))
+    conn.commit()
+    conn.close()
+
+def get_ai_conversation_history(user_id, limit=10):
+    """Get recent AI conversations for context."""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT question, response, created_at FROM AI_Conversations WHERE user_id=? ORDER BY created_at DESC LIMIT ?", (user_id, limit))
+    rows = c.fetchall()
+    conn.close()
+    return rows
+
+# ============================================================
+# RENDER FUNCTIONS

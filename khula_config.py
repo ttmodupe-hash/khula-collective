@@ -119,3 +119,232 @@ GLOBAL_TICKER_UNIVERSE = [
     {"ticker": "TSLA", "name": "Tesla Inc", "region": "US", "risk_level": "high", "category": "stock", "exchange": "NASDAQ"},
     {"ticker": "NVDA", "name": "NVIDIA Corp", "region": "US", "risk_level": "medium", "category": "stock", "exchange": "NASDAQ"},
     {"ticker": "JPM", "name": "JPMorgan Chase", "region": "US", "risk_level": "low", "category": "stock", "exchange": "NYSE"},
+    {"ticker": "BRK-B", "name": "Berkshire Hathaway", "region": "US", "risk_level": "low", "category": "stock", "exchange": "NYSE"},
+    {"ticker": "VOO", "name": "Vanguard S&P 500 ETF", "region": "US", "risk_level": "low", "category": "etf", "exchange": "NYSEARCA"},
+    # EU / LSE + Euronext
+    {"ticker": "SAP.DE", "name": "SAP SE", "region": "EU", "risk_level": "low", "category": "stock", "exchange": "XETRA"},
+    {"ticker": "ASML.AS", "name": "ASML Holding", "region": "EU", "risk_level": "medium", "category": "stock", "exchange": "Euronext"},
+    {"ticker": "NESN.SW", "name": "Nestlé SA", "region": "EU", "risk_level": "low", "category": "stock", "exchange": "SIX"},
+    {"ticker": "LVMH.PA", "name": "LVMH Moët Hennessy", "region": "EU", "risk_level": "medium", "category": "stock", "exchange": "Euronext"},
+    {"ticker": "AIR.PA", "name": "Airbus SE", "region": "EU", "risk_level": "medium", "category": "stock", "exchange": "Euronext"},
+    {"ticker": "EXS1.DE", "name": "iShares EURO STOXX 50", "region": "EU", "risk_level": "low", "category": "etf", "exchange": "XETRA"},
+    # Emerging Markets
+    {"ticker": "0700.HK", "name": "Tencent Holdings", "region": "EM", "risk_level": "medium", "category": "stock", "exchange": "HKEX"},
+    {"ticker": "BABA", "name": "Alibaba Group", "region": "EM", "risk_level": "high", "category": "stock", "exchange": "NYSE"},
+    {"ticker": "TCEHY", "name": "Tesla rival / EV EM", "region": "EM", "risk_level": "high", "category": "stock", "exchange": "OTC"},
+    # Crypto
+    {"ticker": "BTC-USD", "name": "Bitcoin USD", "region": "Crypto", "risk_level": "high", "category": "crypto", "exchange": "CCY"},
+    {"ticker": "ETH-USD", "name": "Ethereum USD", "region": "Crypto", "risk_level": "high", "category": "crypto", "exchange": "CCY"},
+    # Commodities
+    {"ticker": "GC=F", "name": "Gold Futures", "region": "Commodity", "risk_level": "medium", "category": "commodity", "exchange": "COMEX"},
+    {"ticker": "CL=F", "name": "Crude Oil WTI", "region": "Commodity", "risk_level": "medium", "category": "commodity", "exchange": "NYMEX"},
+]
+
+ZAR_RATES = {"USD": 18.5, "EUR": 20.2, "GBP": 23.8}
+
+SA_ID_RULES = {
+    "length": 13,
+    "dob_start": 0, "dob_end": 6,
+    "gender_start": 6, "gender_end": 7,
+    "citizenship_start": 10, "citizenship_end": 11,
+    "checksum_start": 12, "checksum_end": 13,
+}
+
+# ============================================================
+# DATABASE INITIALISATION
+# ============================================================
+
+def init_database():
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+
+    c.execute('''CREATE TABLE IF NOT EXISTS Users (
+        user_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        full_name TEXT NOT NULL,
+        email TEXT,
+        phone TEXT,
+        id_number TEXT,
+        monthly_contribution REAL DEFAULT 500,
+        join_date TEXT,
+        role TEXT DEFAULT 'member',
+        is_active INTEGER DEFAULT 1,
+        fica_verified INTEGER DEFAULT 0,
+        theme_preference TEXT DEFAULT 'dark',
+        risk_profile TEXT DEFAULT 'moderate',
+        last_login TEXT,
+        notification_prefs TEXT DEFAULT 'all'
+    )''')
+
+    c.execute('''CREATE TABLE IF NOT EXISTS Monthly_Contributions (
+        contribution_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        year INTEGER,
+        month INTEGER,
+        amount REAL DEFAULT 0,
+        status TEXT DEFAULT 'pending',
+        payment_date TEXT,
+        payment_method TEXT,
+        reference TEXT,
+        FOREIGN KEY(user_id) REFERENCES Users(user_id)
+    )''')
+
+    c.execute('''CREATE TABLE IF NOT EXISTS Investments (
+        investment_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        type TEXT,
+        amount_invested REAL DEFAULT 0,
+        current_value REAL DEFAULT 0,
+        purchase_date TEXT,
+        maturity_date TEXT,
+        interest_rate REAL,
+        returns REAL DEFAULT 0,
+        status TEXT DEFAULT 'active',
+        risk_level TEXT DEFAULT 'moderate',
+        notes TEXT
+    )''')
+
+    c.execute('''CREATE TABLE IF NOT EXISTS Portfolio (
+        portfolio_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        investment_id INTEGER,
+        user_id INTEGER,
+        shares REAL DEFAULT 0,
+        purchase_price REAL,
+        purchase_date TEXT,
+        FOREIGN KEY(investment_id) REFERENCES Investments(investment_id),
+        FOREIGN KEY(user_id) REFERENCES Users(user_id)
+    )''')
+
+    c.execute('''CREATE TABLE IF NOT EXISTS Votes (
+        vote_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        proposal_id INTEGER,
+        vote TEXT,
+        voted_at TEXT,
+        FOREIGN KEY(user_id) REFERENCES Users(user_id)
+    )''')
+
+    c.execute('''CREATE TABLE IF NOT EXISTS Proposals (
+        proposal_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT,
+        description TEXT,
+        proposed_by INTEGER,
+        status TEXT DEFAULT 'open',
+        created_at TEXT,
+        closes_at TEXT,
+        votes_for INTEGER DEFAULT 0,
+        votes_against INTEGER DEFAULT 0,
+        FOREIGN KEY(proposed_by) REFERENCES Users(user_id)
+    )''')
+
+    c.execute('''CREATE TABLE IF NOT EXISTS Notifications (
+        notification_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        title TEXT,
+        message TEXT,
+        type TEXT DEFAULT 'info',
+        is_read INTEGER DEFAULT 0,
+        created_at TEXT,
+        FOREIGN KEY(user_id) REFERENCES Users(user_id)
+    )''')
+
+    c.execute('''CREATE TABLE IF NOT EXISTS Bank_Transactions (
+        transaction_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        transaction_date TEXT,
+        description TEXT,
+        amount REAL,
+        type TEXT,
+        reference TEXT,
+        category TEXT,
+        synced_from TEXT,
+        FOREIGN KEY(user_id) REFERENCES Users(user_id)
+    )''')
+
+    c.execute('''CREATE TABLE IF NOT EXISTS Feature_Usage (
+        usage_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        feature_id TEXT,
+        used_at TEXT,
+        FOREIGN KEY(user_id) REFERENCES Users(user_id)
+    )''')
+
+    c.execute('''CREATE TABLE IF NOT EXISTS AI_Conversations (
+        conversation_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        question TEXT,
+        response TEXT,
+        context_data TEXT,
+        created_at TEXT,
+        FOREIGN KEY(user_id) REFERENCES Users(user_id)
+    )''')
+
+    # V4.0 TABLES
+    c.execute('''CREATE TABLE IF NOT EXISTS ID_Verifications (
+        verification_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        id_hash TEXT,
+        last_four_digits TEXT,
+        verified_status TEXT,
+        gender TEXT,
+        citizenship TEXT,
+        age INTEGER,
+        verified_at TEXT,
+        FOREIGN KEY(user_id) REFERENCES Users(user_id)
+    )''')
+
+    c.execute('''CREATE TABLE IF NOT EXISTS AI_Recommendations (
+        recommendation_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        ticker TEXT,
+        name TEXT,
+        region TEXT,
+        rationale TEXT,
+        estimated_return TEXT,
+        risk_level TEXT,
+        actionable TEXT,
+        price_zar REAL,
+        units_affordable INTEGER,
+        total_cost_zar REAL,
+        created_at TEXT,
+        FOREIGN KEY(user_id) REFERENCES Users(user_id)
+    )''')
+
+    c.execute('''CREATE TABLE IF NOT EXISTS Global_Market_Prices (
+        price_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ticker TEXT UNIQUE,
+        name TEXT,
+        region TEXT,
+        category TEXT,
+        price_usd REAL,
+        price_zar REAL,
+        change_pct REAL,
+        market_cap TEXT,
+        pe_ratio REAL,
+        dividend_yield REAL,
+        updated_at TEXT
+    )''')
+
+    # Seed demo users
+    demo_users = [
+        ("admin", hashlib.sha256("admin123".encode()).hexdigest(), "Admin User", "admin", "moderate"),
+        ("siphoo", hashlib.sha256("password1".encode()).hexdigest(), "Sipho Mabena", "member", "moderate"),
+    ]
+    for username, pw_hash, full_name, role, risk in demo_users:
+        c.execute("INSERT OR IGNORE INTO Users (username, password_hash, full_name, role, risk_profile, join_date, is_active) VALUES (?,?,?,?,?,?,1)",
+                  (username, pw_hash, full_name, role, risk, datetime.now().isoformat()))
+
+    # Seed sample investments
+    sample_investments = [
+        ("JSE Top 40 Tracker", "Unit Trusts", 15000, 16200, "2024-01-15", None, 8.0, 1200, "active", "low"),
+        ("SASOL Resources Basket", "SASOL / Resources", 5000, 4850, "2024-03-01", None, None, -150, "active", "high"),
+        ("Growthpoint REIT", "REITs (Property)", 8000, 8200, "2024-02-10", None, 6.5, 200, "active", "medium"),
+        ("SARB Retail Savings Bond", "SARB Retail Savings Bonds", 10000, 10500, "2024-01-01", "2027-01-01", 10.0, 500, "active", "low"),
+    ]
+    for name, itype, invested, current, purchase, maturity, rate, ret, status, risk in sample_investments:
+        c.execute("INSERT OR IGNORE INTO Investments (name, type, amount_invested, current_value, purchase_date, maturity_date, interest_rate, returns, status, risk_level) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                  (name, itype, invested, current, purchase, maturity, rate, ret, status, risk))
+
+    conn.commit()
+    conn.close()

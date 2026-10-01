@@ -1,4 +1,5 @@
 from khula_config import *
+from khula_utils import *
 
 # ============================================================
 # LOGIN
@@ -266,3 +267,32 @@ def render_payment_progress():
         st.plotly_chart(fig, use_container_width=True)
 
     conn.close()
+
+# ============================================================
+# AI ADVISOR
+# ============================================================
+def render_ai_advisor():
+    track_feature_usage(st.session_state.user_id, "ai_advisor")
+    st.markdown("<div class='main-header'><h1>🤖 AI Investment Advisor</h1><p>Smart insights for the JSE and SA market</p></div>", unsafe_allow_html=True)
+
+    st.markdown("""
+    <div style='background: #1e1e30; padding: 1.5rem; border-radius: 16px; border: 1px solid #2a2a40; margin-bottom: 1.5rem;'>
+        <h3>📰 SA Market News</h3>
+    </div>
+    """, unsafe_allow_html=True)
+
+    news = random.sample(SA_NEWS_HEADLINES, min(3, len(SA_NEWS_HEADLINES)))
+    for headline in news:
+        st.markdown(f"<p style='color: #a0a0b0; margin: 0.5rem 0;'>• {headline}</p>", unsafe_allow_html=True)
+
+    st.markdown("<h3>💡 Ask the AI Advisor</h3>", unsafe_allow_html=True)
+    question = st.text_input("Ask about JSE stocks, stokvels, or investment strategies")
+    if st.button("Get Advice", type="primary"):
+        responses = [
+            "Consider diversifying across JSE sectors. Resources and financials offer strong dividend yields.",
+            "SARB rates at 8.25% make fixed-income instruments attractive. Consider retail bonds.",
+            "Naspers/Prosus remains a tech proxy. Weigh Tencent exposure against local SA opportunities.",
+            "REITs like Growthpoint and Redefine offer inflation-linked rental income for steady cash flow.",
+            "Stokvels pool capital for collective bargaining power. Consider rotating savings into higher-yield instruments.",
+        ]
+        st.info(random.choice(responses))

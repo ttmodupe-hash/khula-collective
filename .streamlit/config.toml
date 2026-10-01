@@ -8,18 +8,8 @@ font = "sans serif"
 [server]
 headless = true
 enableCORS = false
-enableXsrfProtection = true
-maxUploadSize = 50
+enableXsrfProtection = false
+maxUploadSize = 5
 
 [browser]
 gatherUsageStats = false
-
-[logger]
-level = "info"
-messageFormat = "%(asctime)s %(levelname)s %(name)s: %(message)s"
-
-[runner]
-magicEnabled = true
-
-[deprecation]
-showfileUploaderEncoding = false

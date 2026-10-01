@@ -40,7 +40,7 @@ MONTHS = ["January", "February", "March", "April", "May", "June", "July", "Augus
 APP_FEATURES = [
     {"id": "dashboard", "name": "Dashboard", "icon": "🏠", "description": "Overview of club wealth and portfolio", "category": "Core", "new": False, "premium": False},
     {"id": "payment_tracking", "name": "Payment Tracking", "icon": "💰", "description": "Track contributions and arrears", "category": "Core", "new": False, "premium": False},
-    {"id": "fnb_sync", "name": "FNB Bank Sync", "icon": "🏦", "description": "Automatic FNB transaction sync", "category": "Banking", "new": True, "premium": False},
+    {"id": "fnb_sync", "name": "FNB Bank Sync", "icon": "🏦", "description": "Automatic FNB transaction sync + statement upload", "category": "Banking", "new": True, "premium": False},
     {"id": "feature_discovery", "name": "Feature Discovery", "icon": "✨", "description": "Explore all app features", "category": "Core", "new": True, "premium": False},
     {"id": "member_voice", "name": "Member Voice", "icon": "🗳️", "description": "Vote on investment proposals", "category": "Governance", "new": False, "premium": False},
     {"id": "ai_advisor", "name": "AI Advisor", "icon": "🤖", "description": "Smart investment insights for JSE", "category": "Analytics", "new": True, "premium": True},
@@ -66,6 +66,39 @@ SA_NEWS_HEADLINES = [
     "Johannesburg property market shows signs of recovery",
 ]
 
+SA_MARKET_DATASET = {
+    "jse_allshare": {"value": 82345, "change": +1.2, "trend": "up"},
+    "top40": {"value": 74520, "change": +0.8, "trend": "up"},
+    "sarb_rate": {"value": 8.25, "change": 0.0, "trend": "flat"},
+    "usd_zar": {"value": 18.45, "change": -0.3, "trend": "down"},
+    "gold_price": {"value": 35200, "change": +2.1, "trend": "up"},
+    "brent_oil": {"value": 78.50, "change": -1.2, "trend": "down"},
+    "naspers": {"value": 2850, "change": +3.5, "trend": "up"},
+    "sasol": {"value": 445, "change": -2.1, "trend": "down"},
+    "anglo_american": {"value": 620, "change": +1.8, "trend": "up"},
+    "growthpoint": {"value": 12.45, "change": +0.5, "trend": "up"},
+}
+
+AI_ADVISOR_KNOWLEDGE = {
+    "jse_sectors": {
+        "resources": {"outlook": "positive", "drivers": ["Gold price surge", "Platinum demand"], "risk": "medium", "top_picks": ["Anglo American", "Sibanye-Stillwater", "Gold Fields"]},
+        "financials": {"outlook": "stable", "drivers": ["Interest rate stability", "Banking sector resilience"], "risk": "low", "top_picks": ["FNB/FirstRand", "Standard Bank", "Nedbank"]},
+        "property": {"outlook": "recovering", "drivers": ["Interest rate pause", "Office vacancy decline"], "risk": "medium", "top_picks": ["Growthpoint", "Redefine", "Emira"]},
+        "tech": {"outlook": "volatile", "drivers": ["Naspers/Prosus NAV discount", "Tencent exposure"], "risk": "high", "top_picks": ["Naspers", "Prosus"]},
+    },
+    "stokvel_strategies": [
+        "Rotate 40% into JSE Top 40 ETFs for diversification",
+        "Allocate 30% to SARB Retail Savings Bonds for stability",
+        "Keep 20% liquid in money market for opportunities",
+        "Reserve 10% for high-conviction individual stock picks",
+    ],
+    "risk_profiles": {
+        "conservative": {"allocation": {"bonds": 50, "cash": 30, "equity": 15, "crypto": 5}, "expected_return": "8-10%"},
+        "moderate": {"allocation": {"bonds": 30, "cash": 20, "equity": 40, "crypto": 10}, "expected_return": "12-15%"},
+        "aggressive": {"allocation": {"bonds": 15, "cash": 10, "equity": 60, "crypto": 15}, "expected_return": "18-25%"},
+    },
+}
+
 # ============================================================
 # DATABASE
 # ============================================================
@@ -89,6 +122,7 @@ def init_database():
             is_active INTEGER DEFAULT 1,
             theme_preference TEXT DEFAULT 'dark',
             fica_status TEXT DEFAULT 'pending',
+            risk_profile TEXT DEFAULT 'moderate',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
@@ -159,8 +193,7 @@ def init_database():
             message TEXT,
             type TEXT DEFAULT 'info',
             is_read INTEGER DEFAULT 0,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES Users(user_id)
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
 
@@ -200,6 +233,7 @@ def init_database():
             amount REAL,
             type TEXT,
             reference TEXT,
+            category TEXT DEFAULT 'uncategorized',
             synced_from TEXT DEFAULT 'manual',
             FOREIGN KEY (user_id) REFERENCES Users(user_id)
         )
@@ -212,6 +246,33 @@ def init_database():
             user_id INTEGER,
             feature_id TEXT,
             used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES Users(user_id)
+        )
+    """)
+
+    # Statement Uploads
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS Statement_Uploads (
+            upload_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            filename TEXT,
+            file_type TEXT,
+            upload_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            transactions_parsed INTEGER DEFAULT 0,
+            status TEXT DEFAULT 'pending',
+            FOREIGN KEY (user_id) REFERENCES Users(user_id)
+        )
+    """)
+
+    # AI Conversations
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS AI_Conversations (
+            conversation_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            question TEXT,
+            response TEXT,
+            context_data TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES Users(user_id)
         )
     """)
@@ -232,15 +293,15 @@ def seed_demo_data():
         return
 
     users = [
-        ("admin", hashlib.sha256("admin123".encode()).hexdigest(), "Thabo Modupe", "admin@khula.co.za", "0821234567", "admin", "10010012345", "FNB", 1000),
-        ("siphoo", hashlib.sha256("password1".encode()).hexdigest(), "Sipho Dlamini", "sipho@email.com", "0827654321", "member", "10010054321", "FNB", 500),
-        ("lerato", hashlib.sha256("password2".encode()).hexdigest(), "Lerato Mokoena", "lerato@email.com", "0834567890", "member", "10010098765", "FNB", 750),
-        ("james", hashlib.sha256("password3".encode()).hexdigest(), "James Nkosi", "james@email.com", "0845678901", "member", "10010011111", "FNB", 500),
-        ("nomvula", hashlib.sha256("password4".encode()).hexdigest(), "Nomvula Zuma", "nomvula@email.com", "0856789012", "member", "10010022222", "FNB", 1000),
+        ("admin", hashlib.sha256("admin123".encode()).hexdigest(), "Thabo Modupe", "admin@khula.co.za", "0821234567", "admin", "10010012345", "FNB", 1000, "moderate"),
+        ("siphoo", hashlib.sha256("password1".encode()).hexdigest(), "Sipho Dlamini", "sipho@email.com", "0827654321", "member", "10010054321", "FNB", 500, "moderate"),
+        ("lerato", hashlib.sha256("password2".encode()).hexdigest(), "Lerato Mokoena", "lerato@email.com", "0834567890", "member", "10010098765", "FNB", 750, "conservative"),
+        ("james", hashlib.sha256("password3".encode()).hexdigest(), "James Nkosi", "james@email.com", "0845678901", "member", "10010011111", "FNB", 500, "aggressive"),
+        ("nomvula", hashlib.sha256("password4".encode()).hexdigest(), "Nomvula Zuma", "nomvula@email.com", "0856789012", "member", "10010022222", "FNB", 1000, "moderate"),
     ]
 
     for user in users:
-        c.execute("INSERT INTO Users (username, password_hash, full_name, email, phone, role, bank_account, bank_name, monthly_contribution) VALUES (?,?,?,?,?,?,?,?,?)", user)
+        c.execute("INSERT INTO Users (username, password_hash, full_name, email, phone, role, bank_account, bank_name, monthly_contribution, risk_profile) VALUES (?,?,?,?,?,?,?,?,?,?)", user)
 
     # Demo contributions with some arrears
     current_year = datetime.now().year

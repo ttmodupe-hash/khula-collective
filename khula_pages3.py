@@ -208,15 +208,3 @@ def _render_contribution_tab():
     col_chart1, col_chart2 = st.columns(2)
 
     with col_chart1:
-        st.markdown("<h4 style='color:#a0a0b0;'>Contributions by Member</h4>", unsafe_allow_html=True)
-        df_bar = pd.DataFrame(member_data)
-        if not df_bar.empty:
-            fig = go.Figure(data=[
-                go.Bar(
-                    x=df_bar["Member"],
-                    y=df_bar["Amount"],
-                    marker_color=[m["Status Color"] for m in member_data],
-                    text=[f"R{a:,.0f}" for a in df_bar["Amount"]],
-                    textposition="outside",
-
-# KHULA_APPEND_MARKER_7a3f9e2d

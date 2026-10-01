@@ -100,241 +100,29 @@ AI_ADVISOR_KNOWLEDGE = {
 }
 
 # ============================================================
-# DATABASE
+# V4.0 GLOBAL MARKET INTELLIGENCE
 # ============================================================
-def init_database():
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
 
-    # Users
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS Users (
-            user_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL,
-            full_name TEXT NOT NULL,
-            email TEXT,
-            phone TEXT,
-            role TEXT DEFAULT 'member',
-            bank_account TEXT,
-            bank_name TEXT DEFAULT 'FNB',
-            monthly_contribution REAL DEFAULT 500,
-            is_active INTEGER DEFAULT 1,
-            theme_preference TEXT DEFAULT 'dark',
-            fica_status TEXT DEFAULT 'pending',
-            risk_profile TEXT DEFAULT 'moderate',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
+GLOBAL_TICKER_UNIVERSE = [
+    # SA / JSE — Blue-chip & ETF
+    {"ticker": "SHP.JO", "name": "Shoprite Holdings", "region": "SA", "risk_level": "low", "category": "stock", "exchange": "JSE"},
+    {"ticker": "AGL.JO", "name": "Anglo American plc", "region": "SA", "risk_level": "medium", "category": "stock", "exchange": "JSE"},
+    {"ticker": "MTN.JO", "name": "MTN Group", "region": "SA", "risk_level": "medium", "category": "stock", "exchange": "JSE"},
+    {"ticker": "NPN.JO", "name": "Naspers Ltd", "region": "SA", "risk_level": "medium", "category": "stock", "exchange": "JSE"},
+    {"ticker": "FSR.JO", "name": "FirstRand Ltd", "region": "SA", "risk_level": "low", "category": "stock", "exchange": "JSE"},
+    {"ticker": "STX40.JO", "name": "Satrix 40 ETF", "region": "SA", "risk_level": "low", "category": "etf", "exchange": "JSE"},
+    # US / NYSE + NASDAQ
+    {"ticker": "AAPL", "name": "Apple Inc", "region": "US", "risk_level": "low", "category": "stock", "exchange": "NASDAQ"},
+    {"ticker": "MSFT", "name": "Microsoft Corp", "region": "US", "risk_level": "low", "category": "stock", "exchange": "NASDAQ"},
+    {"ticker": "GOOGL", "name": "Alphabet Inc", "region": "US", "risk_level": "medium", "category": "stock", "exchange": "NASDAQ"},
+    {"ticker": "AMZN", "name": "Amazon.com Inc", "region": "US", "risk_level": "medium", "category": "stock", "exchange": "NASDAQ"},
+    {"ticker": "TSLA", "name": "Tesla Inc", "region": "US", "risk_level": "high", "category": "stock", "exchange": "NASDAQ"},
+    {"ticker": "NVDA", "name": "NVIDIA Corp", "region": "US", "risk_level": "medium", "category": "stock", "exchange": "NASDAQ"},
+    {"ticker": "JPM", "name": "JPMorgan Chase", "region": "US", "risk_level": "low", "category": "stock", "exchange": "NYSE"},
+    {"ticker": "VOO", "name": "Vanguard S&P 500 ETF", "region": "US", "risk_level": "low", "category": "etf", "exchange": "NYSE"},
+    {"ticker": "QQQ", "name": "Invesco Nasdaq-100 ETF", "region": "US", "risk_level": "medium", "category": "etf", "exchange": "NASDAQ"},
+    # EU
+    {"ticker": "ASML", "name": "ASML Holding NV", "region": "EU", "risk_level": "medium", "category": "stock", "exchange": "NASDAQ"},
+    {"ticker": "SAP", "name": "SAP SE", "region": "EU", "risk_level": "medium", "category": "stock", "exchange": "NYSE"},
 
-    # Monthly Contributions
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS Monthly_Contributions (
-            contribution_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
-            year INTEGER,
-            month INTEGER,
-            amount REAL DEFAULT 0,
-            status TEXT DEFAULT 'pending',
-            payment_date DATE,
-            FOREIGN KEY (user_id) REFERENCES Users(user_id)
-        )
-    """)
-
-    # Payment Schedules
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS Payment_Schedules (
-            schedule_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
-            due_date DATE,
-            amount REAL,
-            status TEXT DEFAULT 'pending',
-            FOREIGN KEY (user_id) REFERENCES Users(user_id)
-        )
-    """)
-
-    # Investments
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS Investments (
-            investment_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT,
-            type TEXT,
-            amount_invested REAL,
-            current_value REAL,
-            return_pct REAL,
-            start_date DATE,
-            maturity_date DATE
-        )
-    """)
-
-    # Suggestions
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS Suggestions (
-            suggestion_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
-            title TEXT,
-            description TEXT,
-            investment_type TEXT,
-            amount REAL,
-            votes INTEGER DEFAULT 0,
-            voted_by TEXT DEFAULT '',
-            status TEXT DEFAULT 'open',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES Users(user_id)
-        )
-    """)
-
-    # Notifications
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS Notifications (
-            notification_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
-            title TEXT,
-            message TEXT,
-            type TEXT DEFAULT 'info',
-            is_read INTEGER DEFAULT 0,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-
-    # Announcements
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS Announcements (
-            announcement_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            title TEXT,
-            content TEXT,
-            posted_by INTEGER,
-            priority TEXT DEFAULT 'normal',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-
-    # FNB Sync Log
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS FNB_Sync_Log (
-            sync_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
-            sync_type TEXT,
-            status TEXT,
-            transactions_synced INTEGER DEFAULT 0,
-            error_message TEXT,
-            synced_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES Users(user_id)
-        )
-    """)
-
-    # Bank Transactions
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS Bank_Transactions (
-            transaction_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
-            transaction_date DATE,
-            description TEXT,
-            amount REAL,
-            type TEXT,
-            reference TEXT,
-            category TEXT DEFAULT 'uncategorized',
-            synced_from TEXT DEFAULT 'manual',
-            FOREIGN KEY (user_id) REFERENCES Users(user_id)
-        )
-    """)
-
-    # Feature Usage
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS Feature_Usage (
-            usage_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
-            feature_id TEXT,
-            used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES Users(user_id)
-        )
-    """)
-
-    # Statement Uploads
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS Statement_Uploads (
-            upload_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
-            filename TEXT,
-            file_type TEXT,
-            upload_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            transactions_parsed INTEGER DEFAULT 0,
-            status TEXT DEFAULT 'pending',
-            FOREIGN KEY (user_id) REFERENCES Users(user_id)
-        )
-    """)
-
-    # AI Conversations
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS AI_Conversations (
-            conversation_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
-            question TEXT,
-            response TEXT,
-            context_data TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES Users(user_id)
-        )
-    """)
-
-    conn.commit()
-    conn.close()
-
-# ============================================================
-# DEMO DATA
-# ============================================================
-def seed_demo_data():
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-
-    c.execute("SELECT COUNT(*) FROM Users")
-    if c.fetchone()[0] > 0:
-        conn.close()
-        return
-
-    users = [
-        ("admin", hashlib.sha256("admin123".encode()).hexdigest(), "Thabo Modupe", "admin@khula.co.za", "0821234567", "admin", "10010012345", "FNB", 1000, "moderate"),
-        ("siphoo", hashlib.sha256("password1".encode()).hexdigest(), "Sipho Dlamini", "sipho@email.com", "0827654321", "member", "10010054321", "FNB", 500, "moderate"),
-        ("lerato", hashlib.sha256("password2".encode()).hexdigest(), "Lerato Mokoena", "lerato@email.com", "0834567890", "member", "10010098765", "FNB", 750, "conservative"),
-        ("james", hashlib.sha256("password3".encode()).hexdigest(), "James Nkosi", "james@email.com", "0845678901", "member", "10010011111", "FNB", 500, "aggressive"),
-        ("nomvula", hashlib.sha256("password4".encode()).hexdigest(), "Nomvula Zuma", "nomvula@email.com", "0856789012", "member", "10010022222", "FNB", 1000, "moderate"),
-    ]
-
-    for user in users:
-        c.execute("INSERT INTO Users (username, password_hash, full_name, email, phone, role, bank_account, bank_name, monthly_contribution, risk_profile) VALUES (?,?,?,?,?,?,?,?,?,?)", user)
-
-    # Demo contributions with some arrears
-    current_year = datetime.now().year
-    for uid in range(1, 6):
-        for month in range(1, datetime.now().month + 1):
-            c.execute("SELECT monthly_contribution FROM Users WHERE user_id=?", (uid,))
-            mc = c.fetchone()[0]
-            # Introduce deliberate arrears for demo
-            if uid == 3 and month in [2, 3]:
-                continue  # Lerato is behind
-            if uid == 5 and month == 1:
-                continue  # Nomvula missed January
-            c.execute("INSERT INTO Monthly_Contributions (user_id, year, month, amount, status, payment_date) VALUES (?,?,?,?,?,?)",
-                      (uid, current_year, month, mc, 'verified', f"{current_year}-{month:02d}-0{random.randint(1,7)}"))
-
-    # Demo investments
-    investments = [
-        ("Naspers Ltd", "JSE Listed Equity", 50000, 62000, 24.0, "2024-01-15", "2025-01-15"),
-        ("Sasol Ltd", "SASOL / Resources", 30000, 28500, -5.0, "2024-02-01", "2025-02-01"),
-        ("Growthpoint REIT", "REITs (Property)", 25000, 26800, 7.2, "2024-03-10", "2025-03-10"),
-        ("ABSA Bank Pref", "Bank Preference Shares", 20000, 21000, 5.0, "2024-01-20", "2025-01-20"),
-    ]
-    for inv in investments:
-        c.execute("INSERT INTO Investments (name, type, amount_invested, current_value, return_pct, start_date, maturity_date) VALUES (?,?,?,?,?,?,?)", inv)
-
-    # Demo suggestions
-    suggestions = [
-        (2, "Buy Anglo American", "Strong dividend yield and commodity exposure", "JSE Listed Equity", 15000),
-        (3, "SARB Retail Bond", "Risk-free government backed investment", "SARB Retail Savings Bonds", 10000),
-        (4, "Bitcoin Allocation", "5% portfolio exposure to crypto", "Crypto (Bitcoin)", 5000),
-    ]
-    for s in suggestions:
-        c.execute("INSERT INTO Suggestions (user_id, title, description, investment_type, amount) VALUES (?,?,?,?,?)", s)
-
-    conn.commit()
-    conn.close()
+# KHULA_APPEND_MARKER_7a3f9e2d

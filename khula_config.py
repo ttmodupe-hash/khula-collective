@@ -119,10 +119,3 @@ GLOBAL_TICKER_UNIVERSE = [
     {"ticker": "TSLA", "name": "Tesla Inc", "region": "US", "risk_level": "high", "category": "stock", "exchange": "NASDAQ"},
     {"ticker": "NVDA", "name": "NVIDIA Corp", "region": "US", "risk_level": "medium", "category": "stock", "exchange": "NASDAQ"},
     {"ticker": "JPM", "name": "JPMorgan Chase", "region": "US", "risk_level": "low", "category": "stock", "exchange": "NYSE"},
-    {"ticker": "VOO", "name": "Vanguard S&P 500 ETF", "region": "US", "risk_level": "low", "category": "etf", "exchange": "NYSE"},
-    {"ticker": "QQQ", "name": "Invesco Nasdaq-100 ETF", "region": "US", "risk_level": "medium", "category": "etf", "exchange": "NASDAQ"},
-    # EU
-    {"ticker": "ASML", "name": "ASML Holding NV", "region": "EU", "risk_level": "medium", "category": "stock", "exchange": "NASDAQ"},
-    {"ticker": "SAP", "name": "SAP SE", "region": "EU", "risk_level": "medium", "category": "stock", "exchange": "NYSE"},
-
-# KHULA_APPEND_MARKER_7a3f9e2d

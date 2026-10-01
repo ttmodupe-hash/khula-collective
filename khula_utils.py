@@ -356,3 +356,39 @@ def get_ai_conversation_history(user_id, limit=10):
 
 # ============================================================
 # RENDER FUNCTIONS
+# ============================================================
+
+def render_login():
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.markdown("<div class='main-header'><h1>📈 Khula Collective</h1><p>Empowering South African stokvels and investment clubs</p></div>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align:center;color:#00b894;font-weight:600;'>v3.1 - Now with Statement Upload & AI Advisor</p>", unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
+        with st.form("login_form"):
+            username = st.text_input("Username", placeholder="Enter username")
+            password = st.text_input("Password", type="password", placeholder="Enter password")
+            submitted = st.form_submit_button("🔓 Login", use_container_width=True)
+            if submitted:
+                if not username or not password:
+                    st.error("Please enter both username and password")
+                    return
+                user = authenticate(username, password)
+                if user:
+                    st.session_state.logged_in = True
+                    st.session_state.user_id = user[0]
+                    st.session_state.username = user[1]
+                    st.session_state.full_name = user[2]
+                    st.session_state.role = user[3]
+                    st.session_state.theme = user[4] or "dark"
+                    st.session_state.nav_page = "dashboard"
+                    st.success(f"Welcome back, {user[2]}!")
+                    time.sleep(1)
+                    st.rerun()
+                else:
+                    st.error("Invalid credentials")
+        st.markdown("<br>", unsafe_allow_html=True)
+        with st.expander("Demo Credentials"):
+            st.code("Admin: admin / admin123\nMember: siphoo / password1")
+        st.markdown("<p style='text-align:center;color:#a0a0b0;font-size:0.85rem;'>Powered by FNB Open Banking API</p>", unsafe_allow_html=True)
+
+# End of khula_utils.py

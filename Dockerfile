@@ -16,6 +16,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY app.py .
+COPY khula_config.py .
+COPY khula_utils.py .
+COPY khula_pages1.py .
+COPY khula_pages2.py .
+COPY khula_pages3.py .
 COPY .streamlit/ .streamlit/
 
 # Create non-root user

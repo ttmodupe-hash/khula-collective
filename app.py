@@ -13,6 +13,7 @@ from khula_member_services import (
     render_admin_reconciliation,
     render_club_goals,
     render_constitution_review,
+    render_leaderboard,
     render_communications,
 )
 
@@ -147,6 +148,7 @@ def main():
             ("voice", "🗳️ Member Voice"),
             ("constitution", "📜 Constitution"),
             ("goals", "🎯 Savings Goals"),
+            ("leaderboard", "🏆 Hall of Fame"),
             ("directory", "👥 Directory"),
             ("notifications", "🔔 Notifications"),
             ("reports", "📈 Reports"),
@@ -224,6 +226,8 @@ def main():
         render_constitution_review()
     elif page == "goals":
         render_club_goals()
+    elif page == "leaderboard":
+        render_leaderboard()
     elif page == "directory":
         render_directory()
     elif page == "notifications":

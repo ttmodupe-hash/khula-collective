@@ -9,7 +9,8 @@ from khula_utils import *
 from khula_pages1 import *
 from khula_pages2 import *
 from khula_pages3 import *
-from khula_security import bootstrap_admin
+from khula_security import bootstrap_admin, member_auth_state
+from khula_account import render_change_password
 from khula_sarb import render_sarb_page, render_sarb_panel
 from khula_invitations import render_invitation_admin
 from khula_member_services import (
@@ -130,11 +131,9 @@ def main():
             st.session_state.authenticated = False
         else:
             uid = st.session_state.get("user_id")
-            with sqlite3.connect(DB_PATH) as session_conn:
-                status = session_conn.execute(
-                    "SELECT role,is_active,full_name FROM Users WHERE user_id=?", (uid,)
-                ).fetchone() if uid is not None else None
-            if not status or status[1] != 1:
+            status = member_auth_state(DB_PATH, uid) if uid is not None else None
+            if (not status or status[1] != 1
+                    or status[3] != st.session_state.get("_auth_epoch")):
                 st.session_state.clear()
                 st.session_state.authenticated = False
                 st.warning("Account access is inactive. Please contact the club administrator.")
@@ -151,6 +150,12 @@ def main():
         st.query_params.clear()
 
     st.markdown(load_css(st.session_state.theme), unsafe_allow_html=True)
+
+    if st.session_state.authenticated:
+        current = member_auth_state(DB_PATH, st.session_state.user_id)
+        if current and current[4]:
+            render_change_password(force=True)
+            return
 
     if not st.session_state.authenticated:
         render_login()

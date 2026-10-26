@@ -343,6 +343,22 @@ def init_database():
         UNIQUE(user_id, constitution_version),
         FOREIGN KEY(user_id) REFERENCES Users(user_id)
     )""")
+    c.execute("""CREATE TABLE IF NOT EXISTS Payment_Claims (
+        claim_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        year INTEGER NOT NULL,
+        month INTEGER NOT NULL,
+        amount_zar REAL NOT NULL CHECK(amount_zar > 0),
+        method TEXT NOT NULL,
+        payment_reference TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        submitted_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        reviewed_by INTEGER,
+        reviewed_at TEXT,
+        FOREIGN KEY(user_id) REFERENCES Users(user_id)
+    )""")
+    c.execute("CREATE INDEX IF NOT EXISTS idx_claim_status ON Payment_Claims(status, submitted_at)")
+
     c.execute("""CREATE TABLE IF NOT EXISTS Club_Balance_Snapshots (
         snapshot_id INTEGER PRIMARY KEY AUTOINCREMENT,
         balance_zar REAL NOT NULL CHECK(balance_zar >= 0),

@@ -168,7 +168,7 @@ def main():
         <div style="text-align:center; padding:1rem 0;">
             <div style="font-size:3rem;">🏛️</div>
             <h3 style="color:#6366f1; margin:0;">Khula Collective</h3>
-            <p style="color:#8892b0; font-size:0.85rem;">v4.0 · Super Live Model</p>
+            <p style="color:#8892b0; font-size:0.85rem;">Members · Governance · Savings</p>
         </div>
         """, unsafe_allow_html=True)
 

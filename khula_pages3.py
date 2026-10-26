@@ -1,3 +1,4 @@
+from khula_account import render_change_password
 from khula_member_services import update_member_access
 from khula_governance import cast_vote, close_expired_proposals
 from khula_config import *
@@ -316,6 +317,12 @@ def render_profile():
             st.success("Profile updated!")
             time.sleep(1)
             st.rerun()
+
+# Account password changes require the current password and invalidate old sessions.
+
+    st.divider()
+    render_change_password(force=False)
+
 
 def render_notifications():
     track_feature_usage(st.session_state.user_id, "notifications")

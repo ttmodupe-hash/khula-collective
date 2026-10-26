@@ -4,6 +4,8 @@ Uses pytesseract OCR + SA ID algorithmic validation.
 """
 import re
 import hashlib
+import hmac
+import os
 import sqlite3
 from datetime import datetime
 from khula_config import DB_PATH, SA_ID_RULES
@@ -160,36 +162,30 @@ def validate_sa_id_format(id_number: str):
 
 
 def hash_id_number(id_number: str):
-    """SHA-256 hash the full ID number for secure storage."""
-    return hashlib.sha256(id_number.encode()).hexdigest()
+    """Use a keyed digest when configured; unsalted ID hashes are guessable."""
+    key = os.environ.get("KHULA_ID_HMAC_KEY", "")
+    if len(key) < 32:
+        return None
+    return hmac.new(key.encode("utf-8"), id_number.encode("utf-8"), hashlib.sha256).hexdigest()
 
 
 def store_verification_result(user_id: int, id_number: str, status: str, details: dict, photo_hash: str = None, method: str = "ocr"):
+    """Preliminary format check only, not proof of identity or FICA approval.
+
+    Store no full ID, image or raw OCR data. A real FICA process must have
+    separately documented human review and retention controls.
     """
-    Store verification result POPIA-compliantly.
-    Only stores HASH of ID, last 4 digits, and verification status.
-    NEVER stores the full ID number or the photo itself.
-    """
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("""
-        INSERT INTO ID_Verifications
-        (user_id, id_number_hash, id_number_last4, verified_status, verified_at, id_photo_hash, gender, citizenship, age, verification_method)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
-        user_id,
-        hash_id_number(id_number),
-        id_number[-4:],
-        status,
-        datetime.now().isoformat(),
-        photo_hash,
-        details.get("gender"),
-        details.get("citizenship"),
-        details.get("age"),
-        method
-    ))
-    conn.commit()
-    conn.close()
+    if status == "verified":
+        status = "pending"
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.execute(
+            "INSERT INTO ID_Verifications "
+            "(user_id,id_hash,last_four_digits,verified_status,gender,citizenship,age,verified_at) "
+            "VALUES (?,?,?,?,?,?,?,?)",
+            (user_id, hash_id_number(id_number), id_number[-4:], status,
+             details.get("gender"), details.get("citizenship"), details.get("age"),
+             datetime.now().isoformat()),
+        )
 
 
 def get_user_verification_status(user_id: int):
@@ -228,7 +224,7 @@ def verify_id_from_photo(image, user_id: int = None):
             "success": False,
             "stage": "ocr",
             "message": "Could not read ID number from photo. Please ensure the ID is clearly visible, well-lit, and all 13 digits are readable.",
-            "raw_text_preview": raw_text[:300] if raw_text else None
+            "raw_text_preview": None
         }
 
     # Step 2: Validate ID format and checksum
@@ -258,7 +254,7 @@ def verify_id_from_photo(image, user_id: int = None):
     return {
         "success": True,
         "stage": "complete",
-        "message": "ID verified successfully!",
+        "message": "ID format validated. Manual identity/FICA review is still required.",
         "id_last4": id_number[-4:],
         "details": details,
         "photo_hash": photo_hash

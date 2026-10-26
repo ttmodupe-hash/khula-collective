@@ -26,7 +26,7 @@ urllib3>=2.0.0
 python-dotenv>=1.0.0
 
 # --- Authentication & Security ---
-bcrypt>=4.1.0
+bcrypt>=4.1.0,<6.0.0
 PyJWT>=2.8.0
 
 # --- Form Validation & Utils ---
@@ -42,7 +42,7 @@ openai>=1.0.0            # Optional: for advanced AI features
 
 # --- ID Verification / OCR ---
 pytesseract>=0.3.10      # OCR for ID document reading
-opencv-python>=4.8.0     # Image preprocessing for OCR
+opencv-python-headless>=4.8.0,<5.0.0     # Image preprocessing for OCR
 
 # --- Bank Statement Parsing ---
 pdfplumber>=0.10.0       # PDF parsing for FNB bank statements

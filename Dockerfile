@@ -8,6 +8,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     libsqlite3-dev \
     tesseract-ocr \
+    gosu \
     libgl1 \
     libglib2.0-0 \
     curl \
@@ -36,11 +37,14 @@ COPY khula_invitations.py .
 COPY khula_bank_import.py .
 COPY khula_account.py .
 COPY khula_intelligence.py .
+COPY khula_entrypoint.sh /usr/local/bin/khula-entrypoint
 COPY .streamlit/ .streamlit/
 
-# Create non-root user
-RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
-USER appuser
+# Drop privileges for the application after mounting the writable ledger volume.
+RUN useradd -m -u 1000 appuser \
+    && chown -R appuser:appuser /app \
+    && chmod 755 /usr/local/bin/khula-entrypoint
+USER root
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
@@ -49,4 +53,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 # Railway sets PORT env var automatically
 EXPOSE ${PORT:-8501}
 
-CMD streamlit run app.py --server.port=${PORT:-8501} --server.address=0.0.0.0 --server.headless=true --server.enableCORS=true --server.enableXsrfProtection=true
+CMD ["/usr/local/bin/khula-entrypoint"]

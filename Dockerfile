@@ -7,6 +7,9 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     libsqlite3-dev \
+    tesseract-ocr \
+    libgl1 \
+    libglib2.0-0 \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
@@ -23,6 +26,11 @@ COPY khula_pages2.py .
 COPY khula_pages3.py .
 COPY khula_ai_engine.py .
 COPY khula_id_engine.py .
+COPY khula_security.py .
+COPY khula_advisory_core.py .
+COPY khula_market_data.py .
+COPY khula_member_services.py .
+COPY khula_intelligence.py .
 COPY .streamlit/ .streamlit/
 
 # Create non-root user
@@ -36,4 +44,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 # Railway sets PORT env var automatically
 EXPOSE ${PORT:-8501}
 
-CMD streamlit run app.py --server.port=${PORT:-8501} --server.address=0.0.0.0 --server.headless=true --server.enableCORS=false --server.enableXsrfProtection=false
+CMD streamlit run app.py --server.port=${PORT:-8501} --server.address=0.0.0.0 --server.headless=true --server.enableCORS=true --server.enableXsrfProtection=true

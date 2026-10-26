@@ -1,3 +1,4 @@
+from khula_governance import cast_vote, close_expired_proposals
 from khula_config import *
 from khula_utils import *
 import json
@@ -36,6 +37,8 @@ def render_member_voice():
                 else:
                     st.error("Please fill in all fields")
 
+    # Automatically expire proposal votes before rendering.
+    close_expired_proposals(DB_PATH)
     # List proposals
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
@@ -76,24 +79,20 @@ def render_member_voice():
                     c1, c2 = st.columns(2)
                     with c1:
                         if st.button(f"👍 Vote FOR", key=f"for_{pid}", use_container_width=True):
-                            conn = sqlite3.connect(DB_PATH)
-                            c = conn.cursor()
-                            c.execute("INSERT INTO Votes (user_id, proposal_id, vote, voted_at) VALUES (?,?,?,?)",
-                                      (st.session_state.user_id, pid, "for", datetime.now().isoformat()))
-                            c.execute("UPDATE Proposals SET votes_for = votes_for + 1 WHERE proposal_id=?", (pid,))
-                            conn.commit()
-                            conn.close()
-                            st.rerun()
+                            try:
+                                cast_vote(DB_PATH, st.session_state.user_id, pid, "for")
+                                st.success("Vote recorded.")
+                                st.rerun()
+                            except (ValueError, PermissionError) as exc:
+                                st.error(str(exc))
                     with c2:
                         if st.button(f"👎 Vote AGAINST", key=f"against_{pid}", use_container_width=True):
-                            conn = sqlite3.connect(DB_PATH)
-                            c = conn.cursor()
-                            c.execute("INSERT INTO Votes (user_id, proposal_id, vote, voted_at) VALUES (?,?,?,?)",
-                                      (st.session_state.user_id, pid, "against", datetime.now().isoformat()))
-                            c.execute("UPDATE Proposals SET votes_against = votes_against + 1 WHERE proposal_id=?", (pid,))
-                            conn.commit()
-                            conn.close()
-                            st.rerun()
+                            try:
+                                cast_vote(DB_PATH, st.session_state.user_id, pid, "against")
+                                st.success("Vote recorded.")
+                                st.rerun()
+                            except (ValueError, PermissionError) as exc:
+                                st.error(str(exc))
 
             # Progress bars
             st.markdown(f"""

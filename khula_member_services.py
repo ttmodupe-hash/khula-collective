@@ -208,6 +208,29 @@ def create_goal(admin_id, name, target, due_date, db_path=DB_PATH):
     return cursor.lastrowid
 
 
+def set_member_contribution_target(admin_id, member_id, target, db_path=DB_PATH):
+    """Governance-controlled monthly target; members cannot change this."""
+    amount = zar(target)
+    if amount < 0 or amount > 1000000:
+        raise ValueError("Choose a monthly target between R0 and R1 million.")
+    with sqlite3.connect(db_path) as conn:
+        if not _admin(conn, admin_id):
+            raise PermissionError("Admin only.")
+        row = conn.execute(
+            "SELECT user_id FROM Users WHERE user_id=? AND role='member' AND is_active=1",
+            (member_id,),
+        ).fetchone()
+        if not row:
+            raise ValueError("Active member not found.")
+        conn.execute(
+            "UPDATE Users SET monthly_contribution=? WHERE user_id=?",
+            (float(amount), member_id),
+        )
+        _audit(conn, admin_id, "contribution_target_changed",
+               f"member={member_id}; target_zar={amount}")
+    return True
+
+
 def render_constitution_review():
     import streamlit as st
     user_id = st.session_state.user_id
@@ -291,6 +314,31 @@ def render_admin_reconciliation():
                     st.rerun()
                 except (ValueError, PermissionError) as exc:
                     st.error(str(exc))
+
+    with st.expander("Set member contribution targets (R300/R500 policy must be ratified)"):
+        st.caption("The earlier Khula build used R300/month; v4 used R500. Confirm the club decision before setting targets.")
+        with sqlite3.connect(DB_PATH) as conn:
+            members = conn.execute(
+                "SELECT user_id,full_name,COALESCE(monthly_contribution,0) "
+                "FROM Users WHERE is_active=1 AND role='member' ORDER BY full_name"
+            ).fetchall()
+        for member_id, full_name, target in members:
+            left, mid, right = st.columns([2, 2, 1])
+            with left:
+                st.write(full_name)
+            with mid:
+                new_target = st.number_input(
+                    "Monthly ZAR target", min_value=0.0, max_value=1000000.0,
+                    value=float(target), step=50.0, key=f"target_{member_id}"
+                )
+            with right:
+                if st.button("Save", key=f"save_target_{member_id}"):
+                    try:
+                        set_member_contribution_target(st.session_state.user_id, member_id, new_target)
+                        st.success("Target recorded in audit log.")
+                        st.rerun()
+                    except (ValueError, PermissionError) as exc:
+                        st.error(str(exc))
 
     st.subheader("Pending member payment claims")
     with sqlite3.connect(DB_PATH) as conn:

@@ -149,7 +149,7 @@ def main():
         st.session_state.nav_page = query_params["nav"]
         st.query_params.clear()
 
-    st.markdown(load_css(st.session_state.theme), unsafe_allow_html=True)
+    st.markdown(load_css(st.session_state.get('theme', 'dark')), unsafe_allow_html=True)
 
     if st.session_state.authenticated:
         current = member_auth_state(DB_PATH, st.session_state.user_id)

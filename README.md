@@ -44,9 +44,11 @@ Demo mode creates non-real demonstration credentials and holdings and must never
 be used for members' money. For proper onboarding without demo accounts, set
 private `KHULA_BOOTSTRAP_ADMIN_USER` and `KHULA_BOOTSTRAP_ADMIN_PASSWORD`
 (strong unique password at least 12 bytes), start the app, then remove the
-bootstrap secret after account creation. Set a private `KHULA_INVITE_CODE`
-(at least 12 characters) for member sign-up. Members are initially inactive
-until the admin activates them.
+bootstrap secret after account creation. On first login the bootstrap administrator
+**must rotate the temporary password**. From the administrator menu, create a unique
+seven-day, single-use invitation for each intended member email. Members are
+inactive until the administrator confirms them. Shared invitation passwords
+are no longer accepted.
 
 ## Production configuration — private Railway environment variables
 
@@ -54,7 +56,7 @@ until the admin activates them.
 |---|---|
 | `KHULA_PRODUCTION=1` | Reject relative/ephemeral DB paths at startup |
 | `KHULA_DB_PATH=/data/khula_collective.db` | **Requires real mounted persistent volume** at `/data`; not just a directory |
-| `KHULA_INVITE_CODE` | Private member invitation code; choose a strong value |
+| Member invitation codes | Created by an active administrator, email-bound, expiring and single-use; no shared environment secret |
 | `KHULA_BOOTSTRAP_ADMIN_USER` / `KHULA_BOOTSTRAP_ADMIN_PASSWORD` | First admin only; remove once successfully provisioned |
 | `KHULA_ENABLE_LEGACY_HASH_LOGIN=1` | Temporary, controlled migration of strong SHA-256 legacy passwords; normally off |
 | `KHULA_MARKET_DATA_PROVIDER=twelvedata` | Market adapter selection |
@@ -62,7 +64,7 @@ until the admin activates them.
 | `KHULA_MARKET_DATA_LICENSE_APPROVED=1` | Only enable once your commercial and exchange display rights are confirmed |
 | `KHULA_AI_PROVIDER=openai` + `OPENAI_API_KEY` | Optional educational LLM calls; off without both |
 | `KHULA_AI_MODEL` | Optional configured model name, default gpt-4o-mini |
-| `KHULA_ID_HMAC_KEY` | Keyed identifier digest (32+ characters); enable only after privacy review |
+| `KHULA_BANK_IMPORT_HMAC_KEY` | Private 32+ character secret to permit admin CSV evidence import with masked, keyed transaction identifiers |\n| `KHULA_ID_HMAC_KEY` | Keyed identifier digest (32+ characters); enable only after privacy review |
 | `KHULA_ENABLE_ID_PRECHECK=1` | Optional local OCR-format check; **not** identity/FICA approval |
 | `KHULA_ENABLE_PRIVATE_STATEMENT_IMPORT=1` | Permit private PDF/CSV imports only after privacy and retention review |
 | `KHULA_WHATSAPP_GROUP_LINK` | Optional approved members-only group link |
@@ -83,6 +85,25 @@ python -m compileall -q app.py khula_*.py
 GitHub Actions runs syntax, imports and core financial-control tests on push
 and pull requests. A passing CI build is **not** a substitute for data-migration,
 penetration, operational and compliance acceptance testing.
+
+## Live pilot onboarding and real data
+
+- The public landing/login screen can retrieve **actual, dated SARB economic indicators**
+  from the official SARB Web API. Stale observations are labelled historical.
+- Active administrators issue member-specific invitations from **Member Invitations**.
+  New accounts cannot access financial records until manually activated.
+- Members submit contribution claims; the administrator imports **actual club
+  bank-exported CSV evidence** on the Reconciliation page. Raw CSVs are not retained.
+  Each claim must be linked to one matching, unallocated incoming bank row before
+  being marked paid. This is **manual reconciliation, not live bank API access**.
+- The club's available cash is calculated only from an administrator-attested
+  statement balance minus reserves and only if the snapshot is recent enough.
+- The legacy repo remains untouched. Its SQLite file is seeded demonstration data,
+  not proof of a bank balance or actual member identity.
+- Enable **daily Railway volume backups** from the service's Backups tab and perform
+  a test restore before relying on the ledger with real contributions.
+- The app does not initiate a bank transfer, send investment orders, or send
+  automated WhatsApp reminders.
 
 ## Important financial and regulatory limits
 

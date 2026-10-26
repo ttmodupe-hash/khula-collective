@@ -43,9 +43,9 @@ def render_login():
     <div class='login-container'>
         <div class='login-logo'>
             <h1>📈 Khula Collective</h1>
-            <p>Empowering South African stokvels &amp; investment clubs</p>
+            <p>Transparent savings, responsible investing and shared decisions</p>
         </div>
-        <div class='version-tag'>v4.0 &middot; Super Live Model</div>
+        <div class='version-tag'>Khula Member Portal &middot; Trusted Records</div>
         <div class='login-card'>
     """, unsafe_allow_html=True)
 
@@ -97,9 +97,9 @@ def render_login():
     st.markdown("""
         </div>
         <div class='demo-box'>
-            Member onboarding is by invitation only. Please contact your club administrator.
+            New membership requires a unique invitation and administrator approval.
         </div>
-        <div class='powered-by'>Powered by FNB Open Banking API &middot; Global Market Intelligence</div>
+        <div class='powered-by'>Collective savings &middot; Member governance &middot; Source-labelled research</div>
     </div>
     """, unsafe_allow_html=True)
 

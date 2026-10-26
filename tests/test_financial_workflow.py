@@ -10,6 +10,7 @@ from khula_member_services import (
     submit_payment_claim, review_payment_claim, save_club_balance,
     latest_club_balance, create_goal, set_member_contribution_target,
     acknowledge_constitution, acknowledgement_status,
+    update_member_access,
 )
 from khula_security import bootstrap_admin, authenticate_user, register_member
 
@@ -35,8 +36,7 @@ class FinancialWorkflowTests(unittest.TestCase):
                                       "KhulaPrivateInvite2026!!")
         # Invitation alone is not approval to access private club data.
         self.assertIsNone(authenticate_user(self.db, "memberone", "StrongUniquePassword2026!"))
-        with sqlite3.connect(self.db) as conn:
-            conn.execute("UPDATE Users SET is_active=1 WHERE user_id=?", (self.member,))
+        update_member_access(self.admin, self.member, "member", True, self.db)
 
     def tearDown(self):
         self.env.stop()
@@ -89,6 +89,12 @@ class FinancialWorkflowTests(unittest.TestCase):
         with self.assertRaises(PermissionError):
             create_goal(self.member, "Future fund", 10000, None, self.db)
         create_goal(self.admin, "Future fund", 10000, None, self.db)
+
+    def test_last_admin_cannot_deactivate_self(self):
+        with self.assertRaises(ValueError):
+            update_member_access(self.admin, self.admin, "member", False, self.db)
+        with self.assertRaises(PermissionError):
+            update_member_access(self.member, self.admin, "member", False, self.db)
 
     def test_constitution_receipt_has_version(self):
         self.assertIsNone(acknowledgement_status(self.member, self.db))

@@ -45,7 +45,7 @@ APP_FEATURES = [
     {"id": "fnb_sync", "name": "FNB Bank Sync", "icon": "🏦", "description": "FNB PDF/CSV statement upload; live API requires approval", "category": "Banking", "new": True, "premium": False},
     {"id": "features", "name": "Feature Discovery", "icon": "✨", "description": "Explore all app features", "category": "Core", "new": True, "premium": False},
     {"id": "voice", "name": "Member Voice", "icon": "🗳️", "description": "Vote on investment proposals", "category": "Governance", "new": False, "premium": False},
-    {"id": "ai_advisor", "name": "AI Advisor", "icon": "🤖", "description": "Explainable savings-based research with optional licensed quotes", "category": "Analytics", "new": True, "premium": True},
+    {"id": "ai_advisor", "name": "AI Advisor", "icon": "🤖", "description": "Explainable savings-based research with optional licensed quotes", "category": "Analytics", "new": True, "premium": False},
     {"id": "constitution", "name": "Constitution", "icon": "📜", "description": "Club rules and governance", "category": "Governance", "new": False, "premium": False},
     {"id": "directory", "name": "Member Directory", "icon": "👥", "description": "Contact info and FICA status", "category": "Core", "new": False, "premium": False},
     {"id": "notifications", "name": "Notifications", "icon": "🔔", "description": "Alerts and updates", "category": "Core", "new": False, "premium": False},

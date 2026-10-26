@@ -90,7 +90,12 @@ def bootstrap_admin(db_path):
     if len(password.encode("utf-8")) < 12 or password in ("admin123", "password123"):
         return False
     with sqlite3.connect(db_path) as conn:
-        existing = conn.execute("SELECT 1 FROM Users WHERE role='admin' AND is_active=1 LIMIT 1").fetchone()
+        # Previously seeded demo admins must not block secure first-time setup.
+        demo_hash = hashlib.sha256(b"admin123").hexdigest()
+        existing = conn.execute(
+            "SELECT 1 FROM Users WHERE role='admin' AND is_active=1 "
+            "AND password_hash != ? LIMIT 1", (demo_hash,)
+        ).fetchone()
         if existing:
             return False
         existing_user = conn.execute("SELECT 1 FROM Users WHERE username=? LIMIT 1", (username,)).fetchone()

@@ -329,6 +329,8 @@ def render_notifications():
         return
 
     for nid, title, message, ntype, is_read, created in notifs:
+        title = escape(str(title or ""))
+        message = escape(str(message or ""))
         css_class = "notification-item notification-unread" if not is_read else "notification-item"
         icon = {"info": "ℹ️", "success": "✅", "warning": "⚠️", "error": "❌"}.get(ntype, "📌")
         with st.container():

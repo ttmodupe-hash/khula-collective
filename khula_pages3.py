@@ -318,8 +318,7 @@ def render_profile():
             time.sleep(1)
             st.rerun()
 
-# Account password changes require the current password and invalidate old sessions.
-
+    # Account password changes require the current password and invalidate old sessions.
     st.divider()
     render_change_password(force=False)
 

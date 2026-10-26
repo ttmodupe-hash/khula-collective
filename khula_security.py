@@ -135,7 +135,7 @@ def register_member(db_path, username, full_name, email, password, invite_code):
         try:
             cursor = conn.execute(
                 "INSERT INTO Users (username,password_hash,full_name,email,role,join_date,is_active,fica_verified) "
-                "VALUES (?,?,?,?,'member',?,1,0)",
+                "VALUES (?,?,?,?,'member',?,0,0)",
                 (username, pwd, full_name, email, datetime.now(timezone.utc).isoformat()),
             )
         except sqlite3.IntegrityError as exc:

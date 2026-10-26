@@ -1,6 +1,6 @@
 from html import escape
 from khula_member_services import submit_payment_claim
-from khula_security import register_member, registration_enabled
+from khula_security import register_member, registration_enabled, member_auth_state
 from khula_config import *
 from khula_utils import *
 import hashlib
@@ -65,6 +65,8 @@ def render_login():
                 st.session_state.username = user[1]
                 st.session_state.full_name = user[2]
                 st.session_state.role = user[3]
+                state = member_auth_state(DB_PATH, user[0])
+                st.session_state._auth_epoch = state[3]
                 st.session_state.theme = user[4] or "dark"
                 st.session_state.nav_page = "dashboard"
                 st.success(f"Welcome back, {user[2]}!")

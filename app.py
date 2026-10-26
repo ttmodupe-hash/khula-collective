@@ -1,5 +1,6 @@
 import streamlit as st
 import sqlite3
+import os
 from datetime import datetime
 
 from khula_config import *
@@ -7,6 +8,13 @@ from khula_utils import *
 from khula_pages1 import *
 from khula_pages2 import *
 from khula_pages3 import *
+from khula_security import bootstrap_admin
+from khula_member_services import (
+    render_admin_reconciliation,
+    render_club_goals,
+    render_constitution_review,
+    render_communications,
+)
 
 st.set_page_config(
     page_title="Khula Collective",
@@ -86,8 +94,11 @@ def render_mobile_nav():
 
 
 def main():
+    if os.environ.get("KHULA_PRODUCTION") == "1" and not os.path.isabs(DB_PATH):
+        st.error("Production requires KHULA_DB_PATH pointing to a persistent Railway volume or managed database.")
+        st.stop()
     init_database()
-    seed_demo_data()
+    bootstrap_admin(DB_PATH)
 
     if "theme" not in st.session_state:
         st.session_state.theme = "dark"
@@ -135,6 +146,7 @@ def main():
             ("features", "✨ Discover"),
             ("voice", "🗳️ Member Voice"),
             ("constitution", "📜 Constitution"),
+            ("goals", "🎯 Savings Goals"),
             ("directory", "👥 Directory"),
             ("notifications", "🔔 Notifications"),
             ("reports", "📈 Reports"),
@@ -145,6 +157,7 @@ def main():
         ]
         if st.session_state.role == "admin":
             nav_items.append(("admin", "👑 Admin Panel"))
+            nav_items.append(("reconciliation", "🧾 Reconciliation"))
         nav_items.append(("id_verify", "🆔 ID Verify"))
         nav_items.append(("profile", "👤 Profile"))
 
@@ -205,7 +218,9 @@ def main():
     elif page == "voice":
         render_member_voice()
     elif page == "constitution":
-        render_constitution()
+        render_constitution_review()
+    elif page == "goals":
+        render_club_goals()
     elif page == "directory":
         render_directory()
     elif page == "notifications":
@@ -217,11 +232,13 @@ def main():
     elif page == "global_markets":
         render_global_markets()
     elif page == "whatsapp":
-        render_whatsapp()
+        render_communications()
     elif page == "fnb_api_guide":
         render_fnb_api_guide()
     elif page == "admin":
         render_admin()
+    elif page == "reconciliation":
+        render_admin_reconciliation()
     elif page == "id_verify":
         render_id_verification()
     elif page == "profile":

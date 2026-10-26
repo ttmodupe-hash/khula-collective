@@ -1,3 +1,4 @@
+from khula_member_services import submit_payment_claim
 from khula_security import register_member, registration_enabled
 from khula_config import *
 from khula_utils import *
@@ -293,95 +294,74 @@ def render_fnb_sync():
         st.info("Upload a bank statement to see your financial snapshot.")
 
 def render_payment_progress():
-    """Payment tracking with detailed progress per member."""
+    """Member claims are pending until a real receipt/bank entry is reviewed."""
     track_feature_usage(st.session_state.user_id, "payment_tracking")
-    st.markdown("""
-    <div class='main-header'>
-        <h1>💰 Payment Tracking</h1>
-        <p>Track contributions and manage arrears</p>
-    </div>
-    """, unsafe_allow_html=True)
+    st.title("💰 Contributions and Savings")
+    st.warning("Recorded contribution totals are ledger entries, not live FNB balances. Historical entries made before the approval workflow require reconciliation.")
+    now = datetime.now()
+    with sqlite3.connect(DB_PATH) as conn:
+        members = conn.execute(
+            "SELECT user_id,full_name,COALESCE(monthly_contribution,0) "
+            "FROM Users WHERE is_active=1 AND role='member' ORDER BY full_name"
+        ).fetchall()
+        recorded = conn.execute(
+            "SELECT user_id,COALESCE(SUM(amount),0) "
+            "FROM Monthly_Contributions WHERE year=? AND month=? AND status='paid' "
+            "GROUP BY user_id",
+            (now.year, now.month),
+        ).fetchall()
+        claims = conn.execute(
+            "SELECT claim_id,year,month,amount_zar,status,payment_reference "
+            "FROM Payment_Claims WHERE user_id=? ORDER BY submitted_at DESC LIMIT 15",
+            (st.session_state.user_id,),
+        ).fetchall()
+    amounts = dict(recorded)
+    expected = sum(max(0.0, target) for _, _, target in members)
+    collected = sum(max(0.0, amounts.get(uid, 0.0)) for uid, _, _ in members)
+    col_a, col_b = st.columns(2)
+    col_a.metric("Recorded club contributions this month", f"R{collected:,.2f}")
+    col_b.metric("Sum of member monthly targets", f"R{expected:,.2f}")
+    if expected:
+        st.progress(min(1.0, collected / expected))
+        st.caption("This is a contribution-tracking ratio, not verified bank cash.")
+    else:
+        st.info("No active member contribution targets are recorded.")
 
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
+    is_admin = st.session_state.get("role") == "admin"
+    st.subheader("Monthly member progress")
+    for uid, member_name, target in members:
+        if not is_admin and uid != st.session_state.user_id:
+            continue
+        paid = amounts.get(uid, 0.0)
+        shortfall = max(0.0, target - paid)
+        st.write(f"{member_name}: recorded R{paid:,.2f} / target R{target:,.2f}; remaining R{shortfall:,.2f}")
+        if target:
+            st.progress(min(1.0, paid / target))
 
-    current_year = datetime.now().year
-    current_month = datetime.now().month
+    if st.session_state.get("role") == "member":
+        st.subheader("Submit a contribution for verification")
+        st.caption("This form does NOT transfer money and cannot mark you as paid. The administrator must check the actual bank statement.")
+        with st.form("submit_payment_claim"):
+            amount = st.number_input("Amount deposited or paid (ZAR)", min_value=1.0, max_value=10000000.0, step=50.0)
+            method = st.selectbox("Payment method", ["EFT", "Cash", "Other"])
+            reference = st.text_input("Bank or receipt reference (no account numbers)")
+            if st.form_submit_button("Submit for review"):
+                try:
+                    submit_payment_claim(st.session_state.user_id, now.year, now.month, amount, method, reference)
+                    st.success("Payment claim submitted, pending bank/receipt review.")
+                    st.rerun()
+                except (ValueError, PermissionError) as exc:
+                    st.error(str(exc))
+        if claims:
+            st.subheader("My recent claims")
+            st.dataframe([
+                {"Period": f"{month}/{year}", "Amount": amount, "Status": status,
+                 "Reference": ref}
+                for _, year, month, amount, status, ref in claims
+            ], use_container_width=True)
+    elif is_admin:
+        st.info("Review claims in Admin Reconciliation; only an approved claim posts to the paid ledger.")
 
-    # Overall stats
-    c.execute("SELECT COUNT(*) FROM Users WHERE is_active=1")
-    total_members = c.fetchone()[0] or 1
-    c.execute("SELECT COUNT(*) FROM Monthly_Contributions WHERE year=? AND month=? AND status='paid'", (current_year, current_month))
-    paid_count = c.fetchone()[0] or 0
-    c.execute("SELECT COALESCE(SUM(amount), 0) FROM Monthly_Contributions WHERE year=? AND month=? AND status='paid'", (current_year, current_month))
-    total_collected = c.fetchone()[0] or 0
-
-    expected = total_members * 500
-    collection_rate = (total_collected / expected * 100) if expected > 0 else 0
-
-    st.markdown(f"""
-    <div style='display:flex;gap:1rem;margin-bottom:1.5rem;'>
-        <div class='metric-card' style='flex:1;'><div class='metric-label'>Collection Rate</div><div class='metric-value'>{collection_rate:.1f}%</div></div>
-        <div class='metric-card' style='flex:1;'><div class='metric-label'>Paid / Total</div><div class='metric-value'>{paid_count}/{total_members}</div></div>
-        <div class='metric-card' style='flex:1;'><div class='metric-label'>Total Collected</div><div class='metric-value'>R{total_collected:,.0f}</div></div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # Progress bar
-    st.markdown(f"""
-    <div class='progress-container'>
-        <div class='progress-bar {"success" if collection_rate >= 80 else "warning"}' style='width:{collection_rate}%;'></div>
-    </div>
-    <p style='text-align:center;font-size:0.8rem;color:#a0a0b0;margin-top:0.25rem;'>{collection_rate:.1f}% of monthly target reached</p>
-    """, unsafe_allow_html=True)
-
-    # Member breakdown
-    st.subheader("Member Contributions")
-    c.execute("SELECT user_id, full_name, monthly_contribution FROM Users WHERE is_active=1 ORDER BY full_name")
-    members = c.fetchall()
-
-    for uid, name, target in members:
-        c.execute("SELECT amount, status FROM Monthly_Contributions WHERE user_id=? AND year=? AND month=?", (uid, current_year, current_month))
-        row = c.fetchone()
-        paid = row[0] if row else 0
-        status = row[1] if row else "pending"
-        pct = (paid / target * 100) if target and target > 0 else 0
-
-        status_class = "success" if status == "paid" else "warning" if status == "partial" else ""
-        status_label = status.upper()
-        bar_class = "success" if pct >= 100 else "warning" if pct >= 50 else ""
-
-        with st.container():
-            st.markdown(f"""
-            <div class='arrears-card {status_class}'>
-                <div style='display:flex;justify-content:space-between;align-items:center;'>
-                    <span style='font-weight:600;'>{name}</span>
-                    <span class='payment-status {"status-paid" if status=="paid" else "status-partial" if status=="partial" else "status-late"}'>{status_label}</span>
-                </div>
-                <div style='font-size:0.85rem;color:#a0a0b0;margin-top:0.25rem;'>R{paid:,.0f} / R{target:,.0f}</div>
-                <div class='progress-container'><div class='progress-bar {bar_class}' style='width:{min(pct,100)}%;'></div></div>
-            </div>
-            """, unsafe_allow_html=True)
-
-            if st.session_state.user_id == uid and status != "paid":
-                with st.expander("Make Payment"):
-                    amt = st.number_input("Amount (R)", min_value=0.0, value=float(target - paid), step=50.0, key=f"pay_{uid}")
-                    method = st.selectbox("Method", ["EFT", "Cash", "FNB Instant Pay"], key=f"meth_{uid}")
-                    if st.button("Confirm Payment", key=f"btn_{uid}"):
-                        now = datetime.now().isoformat()
-                        if row:
-                            c.execute("UPDATE Monthly_Contributions SET amount=amount+?, status=?, payment_date=?, payment_method=? WHERE user_id=? AND year=? AND month=?",
-                                      (amt, "paid" if (paid + amt) >= target else "partial", now, method, uid, current_year, current_month))
-                        else:
-                            c.execute("INSERT INTO Monthly_Contributions (user_id, year, month, amount, status, payment_date, payment_method) VALUES (?,?,?,?,?,?,?)",
-                                      (uid, current_year, current_month, amt, "paid" if amt >= target else "partial", now, method))
-                        conn.commit()
-                        add_notification(uid, "Payment Recorded", f"R{amt:,.2f} recorded via {method}", "success")
-                        st.success("Payment recorded!")
-                        time.sleep(1)
-                        st.rerun()
-
-    conn.close()
 
 # ── Global Markets Helpers ──────────────────────────────────
 

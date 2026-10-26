@@ -62,7 +62,15 @@ def fetch_quote(symbol):
     symbol = str(symbol).strip().upper()
     if not VALID_SYMBOL.fullmatch(symbol):
         raise MarketDataError("Invalid market symbol.")
-    data = _request("/quote", {"symbol": symbol})
+    # v4's JSE tickers use Yahoo's .JO suffix; Twelve Data accepts an
+    # explicit exchange argument instead. Preserve the requested symbol
+    # for display while using the provider-specific lookup convention.
+    query = {"symbol": symbol}
+    if symbol.endswith(".JO"):
+        query = {"symbol": symbol[:-3], "exchange": "JSE"}
+    elif symbol in ("BTC-USD", "ETH-USD"):
+        query = {"symbol": symbol.replace("-", "/")}
+    data = _request("/quote", query)
     price = _money_positive(data.get("close"))
     currency = str(data.get("currency") or "").upper()
     if not re.fullmatch(r"[A-Z]{3}", currency):
@@ -72,7 +80,13 @@ def fetch_quote(symbol):
     reported = data.get("timestamp")
     if reported is not None:
         try:
-            as_of = datetime.fromtimestamp(int(reported), tz=timezone.utc).isoformat()
+            quote_time = datetime.fromtimestamp(int(reported), tz=timezone.utc)
+            age = (datetime.now(timezone.utc) - quote_time).total_seconds()
+            if age < -600 or age > 7 * 24 * 3600:
+                raise MarketDataError("Market quote is stale or dated in the future.")
+            as_of = quote_time.isoformat()
+        except MarketDataError:
+            raise
         except (ValueError, OverflowError, TypeError) as exc:
             raise MarketDataError("Market quote has an invalid timestamp.") from exc
     else:

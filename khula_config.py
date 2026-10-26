@@ -171,7 +171,7 @@ def init_database():
         email TEXT,
         phone TEXT,
         id_number TEXT,
-        monthly_contribution REAL DEFAULT 500,
+        monthly_contribution REAL DEFAULT 0,
         join_date TEXT,
         role TEXT DEFAULT 'member',
         is_active INTEGER DEFAULT 1,

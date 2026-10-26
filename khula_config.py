@@ -51,6 +51,8 @@ APP_FEATURES = [
     {"id": "notifications", "name": "Notifications", "icon": "🔔", "description": "Alerts and updates", "category": "Core", "new": False, "premium": False},
     {"id": "reports", "name": "Reports", "icon": "📈", "description": "Detailed analytics and exports", "category": "Analytics", "new": False, "premium": True},
     {"id": "whatsapp", "name": "WhatsApp", "icon": "💬", "description": "Group chat integration", "category": "Communication", "new": True, "premium": False},
+    {"id": "leaderboard", "name": "Hall of Fame", "icon": "🏆", "description": "Opt-in member savings recognition", "category": "Community", "new": True, "premium": False},
+    {"id": "goals", "name": "Savings Goals", "icon": "🎯", "description": "Club savings milestones with transparent cash source", "category": "Community", "new": True, "premium": False},
     {"id": "profile", "name": "Profile", "icon": "👤", "description": "Manage your account", "category": "Core", "new": False, "premium": False},
     {"id": "admin", "name": "Admin Panel", "icon": "👑", "description": "Manage members and settings", "category": "Admin", "new": False, "premium": False},
 ]

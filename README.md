@@ -58,7 +58,7 @@ until the admin activates them.
 | `KHULA_BOOTSTRAP_ADMIN_USER` / `KHULA_BOOTSTRAP_ADMIN_PASSWORD` | First admin only; remove once successfully provisioned |
 | `KHULA_ENABLE_LEGACY_HASH_LOGIN=1` | Temporary, controlled migration of strong SHA-256 legacy passwords; normally off |
 | `KHULA_MARKET_DATA_PROVIDER=twelvedata` | Market adapter selection |
-| `KHULA_TWELVE_DATA_API_KEY` | Secret data-provider key, never commit |
+| `KHULA_TWELVEDATA_API_KEY` | Secret data-provider key, never commit |
 | `KHULA_MARKET_DATA_LICENSE_APPROVED=1` | Only enable once your commercial and exchange display rights are confirmed |
 | `KHULA_AI_PROVIDER=openai` + `OPENAI_API_KEY` | Optional educational LLM calls; off without both |
 | `KHULA_AI_MODEL` | Optional configured model name, default gpt-4o-mini |

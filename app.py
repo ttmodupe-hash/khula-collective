@@ -210,7 +210,10 @@ def main():
     if page == "dashboard":
         render_dashboard()
     elif page == "fnb_sync":
-        render_fnb_sync()
+        if os.environ.get("KHULA_ENABLE_PRIVATE_STATEMENT_IMPORT") == "1":
+            render_fnb_sync()
+        else:
+            st.warning("Private bank-statement import is disabled until storage, retention, privacy consent and reconciliation controls are approved.")
     elif page == "payments":
         render_payment_progress()
     elif page == "features":
@@ -240,7 +243,10 @@ def main():
     elif page == "reconciliation":
         render_admin_reconciliation()
     elif page == "id_verify":
-        render_id_verification()
+        if os.environ.get("KHULA_ENABLE_ID_PRECHECK") == "1" and os.environ.get("KHULA_ID_HMAC_KEY"):
+            render_id_verification()
+        else:
+            st.warning("ID image processing is disabled until the privacy review and keyed-digest secret are configured.")
     elif page == "profile":
         render_profile()
     else:

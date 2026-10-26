@@ -33,6 +33,10 @@ class FinancialWorkflowTests(unittest.TestCase):
         self.member = register_member(self.db, "memberone", "Demo Member One",
                                       "member@example.invalid", "StrongUniquePassword2026!",
                                       "KhulaPrivateInvite2026!!")
+        # Invitation alone is not approval to access private club data.
+        self.assertIsNone(authenticate_user(self.db, "memberone", "StrongUniquePassword2026!"))
+        with sqlite3.connect(self.db) as conn:
+            conn.execute("UPDATE Users SET is_active=1 WHERE user_id=?", (self.member,))
 
     def tearDown(self):
         self.env.stop()

@@ -14,7 +14,9 @@ import matplotlib.pyplot as plt
 # ============================================================
 # CONFIGURATION
 # ============================================================
-DB_PATH = "khula_collective.db"
+# Use a mounted volume (for example /data/khula_collective.db) in production.
+# Railway's container filesystem is ephemeral without an attached volume.
+DB_PATH = os.environ.get("KHULA_DB_PATH", "khula_collective.db")
 
 # FNB Open Banking API Configuration
 FNB_API_BASE = os.environ.get("FNB_API_BASE", "https://api.fnb.co.za/openbanking/v1")
@@ -155,6 +157,9 @@ SA_ID_RULES = {
 # ============================================================
 
 def init_database():
+    # Safe on existing databases: CREATE IF NOT EXISTS does not overwrite data.
+    database_dir = os.path.dirname(os.path.abspath(DB_PATH))
+    os.makedirs(database_dir, exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
 
@@ -326,25 +331,71 @@ def init_database():
         updated_at TEXT
     )''')
 
-    # Seed demo users
-    demo_users = [
-        ("admin", hashlib.sha256("admin123".encode()).hexdigest(), "Admin User", "admin", "moderate"),
-        ("siphoo", hashlib.sha256("password1".encode()).hexdigest(), "Sipho Mabena", "member", "moderate"),
-    ]
-    for username, pw_hash, full_name, role, risk in demo_users:
-        c.execute("INSERT OR IGNORE INTO Users (username, password_hash, full_name, role, risk_profile, join_date, is_active) VALUES (?,?,?,?,?,?,1)",
-                  (username, pw_hash, full_name, role, risk, datetime.now().isoformat()))
+    # Historical capabilities from the earlier Khula repository. The tables
+    # are additive; financial balances are never inferred from seed/demo data.
+    c.execute("""CREATE TABLE IF NOT EXISTS Constitution_Signatures (
+        signature_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        constitution_version TEXT NOT NULL,
+        document_sha256 TEXT NOT NULL,
+        full_name_at_signature TEXT NOT NULL,
+        signed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, constitution_version),
+        FOREIGN KEY(user_id) REFERENCES Users(user_id)
+    )""")
+    c.execute("""CREATE TABLE IF NOT EXISTS Club_Balance_Snapshots (
+        snapshot_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        balance_zar REAL NOT NULL CHECK(balance_zar >= 0),
+        reserved_zar REAL NOT NULL CHECK(reserved_zar >= 0),
+        statement_date TEXT NOT NULL,
+        reference TEXT NOT NULL,
+        source TEXT NOT NULL DEFAULT 'manual_admin',
+        attested_by INTEGER NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(attested_by) REFERENCES Users(user_id)
+    )""")
+    c.execute("""CREATE TABLE IF NOT EXISTS Savings_Goals (
+        goal_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        target_zar REAL NOT NULL CHECK(target_zar > 0),
+        target_date TEXT,
+        created_by INTEGER NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(created_by) REFERENCES Users(user_id)
+    )""")
+    c.execute("""CREATE TABLE IF NOT EXISTS Admin_Actions (
+        action_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        admin_user_id INTEGER NOT NULL,
+        action_type TEXT NOT NULL,
+        details TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )""")
 
-    # Seed sample investments
-    sample_investments = [
-        ("JSE Top 40 Tracker", "Unit Trusts", 15000, 16200, "2024-01-15", None, 8.0, 1200, "active", "low"),
-        ("SASOL Resources Basket", "SASOL / Resources", 5000, 4850, "2024-03-01", None, None, -150, "active", "high"),
-        ("Growthpoint REIT", "REITs (Property)", 8000, 8200, "2024-02-10", None, 6.5, 200, "active", "medium"),
-        ("SARB Retail Savings Bond", "SARB Retail Savings Bonds", 10000, 10500, "2024-01-01", "2027-01-01", 10.0, 500, "active", "low"),
-    ]
-    for name, itype, invested, current, purchase, maturity, rate, ret, status, risk in sample_investments:
-        c.execute("INSERT OR IGNORE INTO Investments (name, type, amount_invested, current_value, purchase_date, maturity_date, interest_rate, returns, status, risk_level) VALUES (?,?,?,?,?,?,?,?,?,?)",
-                  (name, itype, invested, current, purchase, maturity, rate, ret, status, risk))
+    # Demo accounts/holdings are NEVER created in production by default.
+    # Existing data is preserved for review; known demo credentials are
+    # separately denied by authentication outside demo mode.
+    if os.environ.get("KHULA_DEMO_MODE") == "1":
+        demo_users = [
+            ("admin", hashlib.sha256("admin123".encode()).hexdigest(), "Admin User", "admin", "moderate"),
+            ("siphoo", hashlib.sha256("password1".encode()).hexdigest(), "Sipho Mabena", "member", "moderate"),
+        ]
+        for username, pw_hash, full_name, role, risk in demo_users:
+            c.execute(
+                "INSERT OR IGNORE INTO Users (username,password_hash,full_name,role,risk_profile,join_date,is_active) VALUES (?,?,?,?,?,?,1)",
+                (username, pw_hash, full_name, role, risk, datetime.now().isoformat())
+            )
+        c.execute("SELECT COUNT(*) FROM Investments")
+        if c.fetchone()[0] == 0:
+            demo_investments = [
+                ("JSE Top 40 Tracker", "Unit Trusts", 15000, 16200, "2024-01-15", None, 8.0, 1200, "active", "low"),
+                ("SASOL Resources Basket", "SASOL / Resources", 5000, 4850, "2024-03-01", None, None, -150, "active", "high"),
+                ("Growthpoint REIT", "REITs (Property)", 8000, 8200, "2024-02-10", None, 6.5, 200, "active", "medium"),
+                ("SARB Retail Savings Bond", "SARB Retail Savings Bonds", 10000, 10500, "2024-01-01", "2027-01-01", 10.0, 500, "active", "low"),
+            ]
+            c.executemany(
+                "INSERT INTO Investments (name,type,amount_invested,current_value,purchase_date,maturity_date,interest_rate,returns,status,risk_level) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                demo_investments
+            )
 
     conn.commit()
     conn.close()

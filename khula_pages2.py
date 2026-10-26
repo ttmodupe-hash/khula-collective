@@ -32,7 +32,7 @@ def render_id_verification():
     st.markdown(
         "<div class='main-header'>"
         "<h1>🆔 ID Verification</h1>"
-        "<p>AI-powered document verification — fast, secure & POPIA compliant</p>"
+        "<p>Preliminary document-format check — administrator review required</p>"
         "</div>",
         unsafe_allow_html=True,
     )
@@ -99,7 +99,7 @@ def _render_verification_status_dashboard():
     user_id = st.session_state.user_id
     status_rec = get_user_verification_status(user_id)
 
-    st.markdown("<h3>📊 Your Verification Status</h3>", unsafe_allow_html=True)
+    st.markdown("<h3>📊 Your ID Format Check Status</h3>", unsafe_allow_html=True)
 
     if status_rec:
         status = status_rec["status"]
@@ -126,7 +126,7 @@ def _render_verification_status_dashboard():
                     <div style="display:flex; align-items:center; gap:0.75rem; margin-bottom:0.75rem;">
                         <span style="font-size:2rem;">✅</span>
                         <div>
-                            <div style="font-weight:700; font-size:1.1rem; color:#00b894;">Verified</div>
+                            <div style="font-weight:700; font-size:1.1rem; color:#00b894;">Previously marked verified — review required</div>
                             <div style="color:#a0a0b0; font-size:0.85rem;">on {date_str}</div>
                         </div>
                     </div>
@@ -543,7 +543,7 @@ def _render_manual_entry_fallback():
                         photo_hash=None,
                         method="manual",
                     )
-                    st.success("✅ ID validated and verified successfully!")
+                    st.success("✅ ID format validated; independent identity/FICA review is pending.")
                     st.balloons()
 
                     gender = details.get("gender", "—")
@@ -554,7 +554,7 @@ def _render_manual_entry_fallback():
                         f"""
                         <div style="background: #00b89422; border: 1px solid #00b894;
                                     padding: 1rem; border-radius: 12px; margin-top: 1rem;">
-                            <div style="font-weight:600; color:#00b894; margin-bottom:0.5rem;">Verified Details</div>
+                            <div style="font-weight:600; color:#00b894; margin-bottom:0.5rem;">ID Format Check Details</div>
                             <div style="display:flex; gap:1.5rem; flex-wrap:wrap;">
                                 <div><span style="color:#a0a0b0; font-size:0.8rem;">GENDER</span><br><strong>{gender.title()}</strong></div>
                                 <div><span style="color:#a0a0b0; font-size:0.8rem;">CITIZENSHIP</span><br><strong>{citizenship.replace('_', ' ').title()}</strong></div>
@@ -583,33 +583,13 @@ def _render_manual_entry_fallback():
 
 
 def _render_popia_notice():
-    """Display POPIA compliance notice."""
-    st.markdown(
-        """
-        <div style="background: linear-gradient(135deg, #1e1e3a, #1a1a2e);
-                    border: 1px solid #2a2a50;
-                    padding: 1.25rem;
-                    border-radius: 16px;
-                    margin-top: 1rem;">
-            <div style="display:flex; align-items:start; gap:0.75rem;">
-                <span style="font-size:1.5rem;">🔒</span>
-                <div>
-                    <div style="font-weight:700; color:#00b894; margin-bottom:0.25rem;">POPIA Compliant & Privacy First</div>
-                    <div style="color:#a0a0b0; font-size:0.85rem; line-height:1.5;">
-                        Your ID photo is processed <strong>in-memory only</strong> and is <strong>NEVER stored</strong>.
-                        We keep only a secure SHA-256 hash and the last 4 digits for confirmation purposes.
-                        No human ever sees your full ID number or photograph.
-                        <br><br>
-                        This processing is done in accordance with the
-                        <a href="https://www.gov.za/documents/protection-personal-information-act" target="_blank" style="color:#00b894;">
-                            Protection of Personal Information Act (POPIA) 4 of 2013
-                        </a>.
-                    </div>
-                </div>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    """Avoid claiming legal compliance or identity verification from OCR alone."""
+    st.info(
+        "Privacy notice: Uploaded ID images are processed during this session; "
+        "the application stores a masked suffix, check result and optionally a "
+        "keyed digest. ID checksum/OCR validation does NOT verify a person's "
+        "identity, FICA status, or POPIA compliance. An authorised manual review "
+        "and documented retention policy are still required."
     )
 
 

@@ -65,7 +65,7 @@ def _render_quote(ticker, scenario_cash=None):
     if not market_configured():
         st.warning(
             "Real market quotes are not enabled. Configure a licensed Twelve Data "
-            "business plan, KHULA_TWELVE_DATA_API_KEY and the explicit display-rights flag. "
+            "business plan, KHULA_TWELVEDATA_API_KEY and the explicit display-rights flag. "
             "No simulated price is shown."
         )
         return

@@ -12,7 +12,7 @@ from khula_member_services import (
     acknowledge_constitution, acknowledgement_status,
     update_member_access,
 )
-from khula_security import bootstrap_admin, authenticate_user, register_member
+from khula_security import bootstrap_admin, authenticate_user, register_member, change_member_password, member_auth_state
 from khula_invitations import generate_invitation
 from khula_bank_import import import_club_statement, unallocated_bank_credits, BankImportError
 from datetime import date
@@ -61,6 +61,20 @@ class FinancialWorkflowTests(unittest.TestCase):
             hash_password("a" * 80)
         with self.assertRaises(ValueError):
             hash_password("short")
+
+    def test_bootstrap_password_rotates_and_invalidates_sessions(self):
+        before = member_auth_state(self.db, self.admin)
+        self.assertEqual(before[4], 1)
+        self.assertTrue(change_member_password(
+            self.db, self.admin,
+            "CorrectHorseBatteryStaple2026!",
+            "ACompletelyDifferentLongPassword2026#"
+        ))
+        after = member_auth_state(self.db, self.admin)
+        self.assertEqual(after[4], 0)
+        self.assertEqual(after[3], before[3]+1)
+        self.assertIsNone(authenticate_user(self.db, "khulaadmin", "CorrectHorseBatteryStaple2026!"))
+        self.assertIsNotNone(authenticate_user(self.db, "khulaadmin", "ACompletelyDifferentLongPassword2026#"))
 
     def test_login_throttle_persists_in_database(self):
         for _ in range(8):

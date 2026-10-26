@@ -1,3 +1,4 @@
+from html import escape
 from khula_member_services import submit_payment_claim
 from khula_security import register_member, registration_enabled
 from khula_config import *
@@ -103,7 +104,7 @@ def render_login():
 def render_dashboard():
     """Main dashboard with portfolio overview, market data, and quick actions."""
     track_feature_usage(st.session_state.user_id, "dashboard")
-    user_name = st.session_state.get("full_name", "Member")
+    user_name = escape(str(st.session_state.get("full_name", "Member")))
 
     st.markdown(f"""
     <div class='main-header'>

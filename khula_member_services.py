@@ -12,6 +12,8 @@ from datetime import date, datetime, timezone
 from urllib.parse import urlparse
 
 from khula_advisory_core import zar, available_savings
+from khula_bank_import import (import_club_statement, unallocated_bank_credits,
+                               attach_credit_to_claim, BankImportError)
 from khula_config import DB_PATH
 
 
@@ -83,7 +85,7 @@ def submit_payment_claim(user_id, year, month, amount, method, reference, db_pat
         return cursor.lastrowid
 
 
-def review_payment_claim(admin_id, claim_id, approve, evidence_checked, db_path=DB_PATH):
+def review_payment_claim(admin_id, claim_id, approve, evidence_checked, db_path=DB_PATH, evidence_id=None):
     if approve and not evidence_checked:
         raise ValueError("Check the actual bank statement/receipt before approving.")
     with sqlite3.connect(db_path) as conn:
@@ -104,6 +106,12 @@ def review_payment_claim(admin_id, claim_id, approve, evidence_checked, db_path=
             ("approved" if approve else "rejected", admin_id, now, claim_id),
         )
         if approve:
+            if evidence_id is None:
+                raise BankImportError(
+                    "Approving contributions requires an unallocated incoming "
+                    "credit from an administrator-supplied bank statement."
+                )
+            attach_credit_to_claim(conn, claim_id, evidence_id, amount)
             conn.execute(
                 "INSERT INTO Monthly_Contributions "
                 "(user_id,year,month,amount,status,payment_date,payment_method,reference) "
@@ -351,7 +359,7 @@ def render_club_goals():
                         create_goal(st.session_state.user_id, name, amount, due.isoformat() if due else None)
                         st.success("Goal saved.")
                         st.rerun()
-                    except (ValueError, PermissionError) as exc:
+                    except (ValueError, PermissionError, BankImportError) as exc:
                         st.error(str(exc))
 
 
@@ -409,6 +417,36 @@ def render_admin_reconciliation():
                     except (ValueError, PermissionError) as exc:
                         st.error(str(exc))
 
+    st.subheader("Import verified-source bank CSV evidence")
+    st.caption(
+        "Upload an actual export from the club's bank account. "
+        "This is manual evidence, not an FNB/Stitch API connection. "
+        "Raw statement contents are discarded after parsing; references are masked."
+    )
+    if os.environ.get("KHULA_BANK_IMPORT_HMAC_KEY") and len(os.environ["KHULA_BANK_IMPORT_HMAC_KEY"]) >= 32:
+        file = st.file_uploader("Club bank CSV (Date, Amount, Reference or Description)",
+                                type=["csv"], key="club_evidence_csv")
+        provenance = st.checkbox(
+            "I checked that this is an authentic statement export belonging to the club.",
+            key="bank_statement_origin_checked"
+        )
+        if st.button("Import bank evidence", disabled=not(file and provenance)):
+            try:
+                summary = import_club_statement(
+                    DB_PATH, st.session_state.user_id, file.getvalue(),
+                    source_checked=provenance
+                )
+                st.success(
+                    f"Imported {summary['new_rows']} bank rows; "
+                    f"{summary['duplicates_skipped']} existing rows skipped. "
+                    "Bank connection not yet API-verified."
+                )
+                st.rerun()
+            except (BankImportError, PermissionError) as exc:
+                st.error(str(exc))
+    else:
+        st.warning("Bank CSV evidence import remains disabled until a private HMAC key is configured.")
+
     st.subheader("Pending member payment claims")
     with sqlite3.connect(DB_PATH) as conn:
         pending = conn.execute(
@@ -421,12 +459,32 @@ def render_admin_reconciliation():
     for cid, member, year, month, amount, method, ref in pending:
         with st.expander(f"Claim #{cid} — {member}: R{amount:,.2f} ({month}/{year})"):
             st.write(f"Method: {method}; reference: {ref}")
-            checked = st.checkbox("I checked the actual bank statement or receipt", key=f"proof_{cid}")
+            credits = unallocated_bank_credits(DB_PATH, st.session_state.user_id, amount)
+            option_map = {
+                f"Bank row #{bid} · {when} · R{amt:,.2f} · {mask}": bid
+                for bid, when, amt, mask in credits
+            }
+            selected = st.selectbox(
+                "Matching incoming club bank credit",
+                options=list(option_map),
+                index=None,
+                placeholder="Choose a matching unallocated credit",
+                key=f"bankrow_{cid}",
+            )
+            checked = st.checkbox(
+                "I matched this credit to the member's genuine bank reference and evidence",
+                key=f"proof_{cid}"
+            )
+            if not credits:
+                st.warning("No matching imported credit. Upload the bank export before approval.")
             c1, c2 = st.columns(2)
             with c1:
-                if st.button("Approve and post contribution", disabled=not checked, key=f"approve_{cid}"):
+                if st.button("Approve and post contribution", disabled=not (checked and selected), key=f"approve_{cid}"):
                     try:
-                        review_payment_claim(st.session_state.user_id, cid, True, checked)
+                        review_payment_claim(
+                            st.session_state.user_id, cid, True, checked,
+                            evidence_id=option_map[selected]
+                        )
                         st.success("Contribution posted.")
                         st.rerun()
                     except (ValueError, PermissionError) as exc:

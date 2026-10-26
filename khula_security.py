@@ -133,8 +133,8 @@ def bootstrap_admin(db_path):
         if existing_user:
             return False
         conn.execute(
-            "INSERT INTO Users (username,password_hash,full_name,role,join_date,is_active) "
-            "VALUES (?,?,?,?,?,1)",
+            "INSERT INTO Users (username,password_hash,full_name,role,join_date,is_active,must_change_password) "
+            "VALUES (?,?,?,?,?,1,1)",
             (username, hash_password(password), "Khula Administrator", "admin",
              datetime.now(timezone.utc).isoformat()),
         )
@@ -144,6 +144,39 @@ def bootstrap_admin(db_path):
 def registration_enabled():
     # Real registration requires a unique, admin-issued invitation.
     return not _is_demo_mode()
+
+
+def member_auth_state(db_path, user_id):
+    with sqlite3.connect(db_path) as conn:
+        return conn.execute(
+            "SELECT role,is_active,full_name,auth_epoch,must_change_password "
+            "FROM Users WHERE user_id=?", (user_id,)
+        ).fetchone()
+
+
+def change_member_password(db_path, user_id, current_password, next_password):
+    """Verified self-service password rotation; invalidate other sessions."""
+    if not isinstance(current_password, str) or not isinstance(next_password, str):
+        raise ValueError("Invalid password input.")
+    if current_password == next_password:
+        raise ValueError("Choose a different new password.")
+    new_hash = hash_password(next_password)
+    with sqlite3.connect(db_path, timeout=15) as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        record = conn.execute(
+            "SELECT password_hash,is_active FROM Users WHERE user_id=?", (user_id,)
+        ).fetchone()
+        if not record or not record[1]:
+            raise PermissionError("Active account required.")
+        accepted, _ = _verify_password(current_password, record[0])
+        if not accepted:
+            raise ValueError("Current password is incorrect.")
+        conn.execute(
+            "UPDATE Users SET password_hash=?,auth_epoch=auth_epoch+1,"
+            "must_change_password=0 WHERE user_id=?",
+            (new_hash, user_id),
+        )
+    return True
 
 
 def register_member(db_path, username, full_name, email, password, invite_code):

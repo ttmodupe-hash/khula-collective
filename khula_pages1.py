@@ -87,7 +87,7 @@ def render_login():
                     else:
                         try:
                             register_member(DB_PATH, new_user, new_name, new_email, new_password, invite)
-                            st.success("Account created. Please sign in; member verification is still pending.")
+                            st.success("Request submitted. An administrator must activate your account before you can sign in.")
                         except ValueError as exc:
                             st.error(str(exc))
 

@@ -208,6 +208,36 @@ def create_goal(admin_id, name, target, due_date, db_path=DB_PATH):
     return cursor.lastrowid
 
 
+def update_member_access(admin_id, target_id, role, active, db_path=DB_PATH):
+    """Admin-only, audited role and activation decisions."""
+    if role not in ("admin", "member") or type(active) is not bool:
+        raise ValueError("Invalid role or activation.")
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        if not _admin(conn, admin_id):
+            raise PermissionError("Admin only.")
+        current = conn.execute(
+            "SELECT role,is_active FROM Users WHERE user_id=?",
+            (target_id,),
+        ).fetchone()
+        if not current:
+            raise ValueError("User not found.")
+        if current[0] == "admin" and current[1] == 1 and (role != "admin" or not active):
+            remaining = conn.execute(
+                "SELECT COUNT(*) FROM Users WHERE role='admin' AND is_active=1 AND user_id!=?",
+                (target_id,),
+            ).fetchone()[0]
+            if remaining == 0:
+                raise ValueError("Cannot disable or demote the only active admin.")
+        conn.execute(
+            "UPDATE Users SET role=?,is_active=? WHERE user_id=?",
+            (role, 1 if active else 0, target_id),
+        )
+        _audit(conn, admin_id, "member_access_updated",
+               f"user={target_id}; role={role}; active={active}")
+    return True
+
+
 def set_member_contribution_target(admin_id, member_id, target, db_path=DB_PATH):
     """Governance-controlled monthly target; members cannot change this."""
     amount = zar(target)

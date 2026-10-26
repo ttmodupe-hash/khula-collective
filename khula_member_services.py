@@ -231,6 +231,45 @@ def set_member_contribution_target(admin_id, member_id, target, db_path=DB_PATH)
     return True
 
 
+def render_leaderboard():
+    """Opt-in original Hall of Fame restored without exposing private totals."""
+    import streamlit as st
+    st.title("🏆 Khula Hall of Fame")
+    st.caption("Members opt in to appear publicly within the club. Rankings use recorded 'paid' entries, not verified cash balance.")
+    with sqlite3.connect(DB_PATH) as conn:
+        item = conn.execute(
+            "SELECT COALESCE(leaderboard_opt_in,0) FROM Users WHERE user_id=? AND is_active=1",
+            (st.session_state.user_id,),
+        ).fetchone()
+        opt_in = bool(item[0]) if item else False
+        consent = st.checkbox("Display my name and recorded contributions on the members' leaderboard",
+                              value=opt_in, key="leaderboard_privacy_optin")
+        if consent != opt_in:
+            if st.button("Save leaderboard consent"):
+                conn.execute(
+                    "UPDATE Users SET leaderboard_opt_in=? WHERE user_id=? AND is_active=1",
+                    (1 if consent else 0, st.session_state.user_id),
+                )
+                conn.commit()
+                st.success("Your visibility preference was updated.")
+                st.rerun()
+        entries = conn.execute(
+            "SELECT u.full_name,COALESCE(SUM(mc.amount),0) AS recorded_paid "
+            "FROM Users u LEFT JOIN Monthly_Contributions mc "
+            "ON u.user_id=mc.user_id AND mc.status='paid' "
+            "WHERE u.is_active=1 AND u.role='member' AND u.leaderboard_opt_in=1 "
+            "GROUP BY u.user_id ORDER BY recorded_paid DESC, u.user_id ASC"
+        ).fetchall()
+    if not entries:
+        st.info("No members have opted into the Hall of Fame yet.")
+        return
+    st.dataframe(
+        [{"Rank": rank, "Member": name, "Recorded contributions (ZAR)": round(float(total), 2)}
+         for rank, (name, total) in enumerate(entries, 1)],
+        use_container_width=True,
+    )
+
+
 def render_constitution_review():
     import streamlit as st
     user_id = st.session_state.user_id

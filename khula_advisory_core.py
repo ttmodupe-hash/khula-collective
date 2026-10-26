@@ -4,6 +4,7 @@ Amounts are in ZAR and use Decimal, not binary floats. These are educational
 scenarios only: no order placement, promises of returns or implied bank access.
 """
 from decimal import Decimal, InvalidOperation, ROUND_DOWN
+from datetime import date
 
 CENT = Decimal("0.01")
 
@@ -30,6 +31,17 @@ def available_savings(bank_balance, reserved=0, committed=0):
     if min(cash, reserve, commitments) < 0:
         raise ValueError("Amounts cannot be negative")
     return max(Decimal("0.00"), cash - reserve - commitments).quantize(CENT)
+
+
+def bank_snapshot_fresh(as_of, max_days=14, today=None):
+    """Do not model purchases from an old or future-dated manual bank record."""
+    try:
+        dated = date.fromisoformat(str(as_of))
+    except (ValueError, TypeError):
+        return False
+    now = today or date.today()
+    age = (now - dated).days
+    return 0 <= age <= max_days
 
 
 def contribution_progress(paid_amount, monthly_target):

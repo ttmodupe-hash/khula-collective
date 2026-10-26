@@ -179,8 +179,14 @@ def init_database():
         theme_preference TEXT DEFAULT 'dark',
         risk_profile TEXT DEFAULT 'moderate',
         last_login TEXT,
-        notification_prefs TEXT DEFAULT 'all'
+        notification_prefs TEXT DEFAULT 'all',
+        leaderboard_opt_in INTEGER NOT NULL DEFAULT 0
     )''')
+
+    # Privacy-preserving opt-in leaderboard column for existing databases.
+    columns = {row[1] for row in c.execute("PRAGMA table_info(Users)").fetchall()}
+    if "leaderboard_opt_in" not in columns:
+        c.execute("ALTER TABLE Users ADD COLUMN leaderboard_opt_in INTEGER NOT NULL DEFAULT 0")
 
     c.execute('''CREATE TABLE IF NOT EXISTS Monthly_Contributions (
         contribution_id INTEGER PRIMARY KEY AUTOINCREMENT,

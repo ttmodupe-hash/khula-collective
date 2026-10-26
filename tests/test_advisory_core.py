@@ -1,13 +1,22 @@
 import unittest
 from decimal import Decimal
+from datetime import date
 
 from khula_advisory_core import (
     available_savings, affordable_units, illustrative_allocation,
     allocation_amounts, no_growth_projection, contribution_progress, zar,
+    bank_snapshot_fresh,
 )
 
 
 class AdvisorySafetyTests(unittest.TestCase):
+    def test_stale_or_future_bank_snapshot_blocks_affordability(self):
+        today = date(2026, 10, 26)
+        self.assertTrue(bank_snapshot_fresh("2026-10-20", today=today))
+        self.assertFalse(bank_snapshot_fresh("2026-10-01", today=today))
+        self.assertFalse(bank_snapshot_fresh("2026-11-01", today=today))
+        self.assertFalse(bank_snapshot_fresh("unknown", today=today))
+
     def test_missing_bank_record_must_not_estimate_cash(self):
         self.assertIsNone(available_savings(None))
 

@@ -415,13 +415,69 @@ def render_admin_reconciliation():
         st.dataframe([{"action": a, "details": d, "at": t} for a, d, t in rows], use_container_width=True)
 
 
+def communication_preview(member_name, amount_due, monthly_paid, kind):
+    """Adapted from the old Khula WhatsApp templates, without automatic sending."""
+    amount_due, monthly_paid = zar(amount_due), zar(monthly_paid)
+    if kind == "Payment reminder":
+        return (
+            f"Hi {member_name}, Khula Collective here. Our records show an outstanding "
+            f"monthly contribution target of R{max(zar(0), amount_due - monthly_paid):,.2f}. "
+            "If you have already paid, please send the reference for admin verification. "
+            "No payment is assumed received until reconciled. Reply STOP to opt out."
+        )
+    if kind == "Monthly summary":
+        return (
+            f"Hi {member_name}, your Khula contributions recorded as paid this month "
+            f"total R{monthly_paid:,.2f}. Please check your dashboard and tell the "
+            "committee about any discrepancy. Reply STOP to opt out."
+        )
+    if kind == "Constitution review":
+        return (
+            f"Hi {member_name}, please log in to Khula Collective to review the current "
+            "draft constitution. Acknowledgement is not legal approval. Reply STOP to opt out."
+        )
+    raise ValueError("Unknown message template.")
+
+
 def render_communications():
     import streamlit as st
     st.title("💬 Member Communications")
-    st.info("Original WhatsApp capabilities preserved in the migration roadmap. No automated messages are sent without configured consent and an approved provider.")
+    st.info(
+        "Legacy WhatsApp reminder templates are restored as admin-reviewed previews. "
+        "No bulk delivery or automatic Twilio messages are enabled. Messaging requires "
+        "member consent, an approved provider and a confirmed monthly contribution policy."
+    )
     link = os.environ.get("KHULA_WHATSAPP_GROUP_LINK", "").strip()
     parsed = urlparse(link)
     if parsed.scheme == "https" and parsed.hostname == "chat.whatsapp.com":
-        st.link_button("Open members' WhatsApp group", link)
+        st.link_button("Open the verified members' WhatsApp group", link)
     else:
-        st.caption("No official WhatsApp group link configured. Ask the administrator for the verified group invitation.")
+        st.caption("No approved WhatsApp group link configured.")
+
+    if st.session_state.role != "admin":
+        return
+    st.subheader("Preview an individual reminder — no message is sent")
+    with sqlite3.connect(DB_PATH) as conn:
+        members = conn.execute(
+            "SELECT u.user_id,u.full_name,COALESCE(u.monthly_contribution,0), "
+            "COALESCE((SELECT SUM(mc.amount) FROM Monthly_Contributions mc "
+            "WHERE mc.user_id=u.user_id AND mc.status='paid' AND "
+            "mc.year=CAST(strftime('%Y','now') AS INTEGER) AND "
+            "mc.month=CAST(strftime('%m','now') AS INTEGER)),0) "
+            "FROM Users u WHERE u.role='member' AND u.is_active=1 ORDER BY u.full_name"
+        ).fetchall()
+    if not members:
+        st.info("No active members available for preview.")
+        return
+    names = {f"{member[1]} (member #{member[0]})": member for member in members}
+    label = st.selectbox("Member", list(names))
+    member_id, full_name, target, paid = names[label]
+    if not target:
+        st.warning("The club has not assigned a monthly contribution target to this member.")
+    kind = st.selectbox("Template", ["Payment reminder", "Monthly summary", "Constitution review"])
+    preview = communication_preview(full_name, target, paid, kind)
+    st.text_area("Review and copy the proposed message", preview, height=190)
+    st.caption(
+        "Ensure the recipient opted in and check the actual financial records. "
+        "No phone numbers or external sends are exposed by this preview."
+    )

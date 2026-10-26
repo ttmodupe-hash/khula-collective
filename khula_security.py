@@ -107,7 +107,7 @@ def authenticate_user(db_path, username, password):
         # Bound table growth without storing passwords, tokens, IP addresses or user PII.
         conn.execute(
             "DELETE FROM Login_Attempts WHERE attempted_at<?",
-            (now - timedelta(days=1)).isoformat(),
+            ((now - timedelta(days=1)).isoformat(),),
         )
         return tuple(row[:5])
 

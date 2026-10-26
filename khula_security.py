@@ -8,7 +8,7 @@ import hmac
 import os
 import re
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 import bcrypt
 from khula_invitations import email_normalised, verify_and_use_invitation
@@ -47,37 +47,67 @@ def _verify_password(password, stored_hash):
     return True, hash_password(password)
 
 
+def _init_login_tracking(conn):
+    conn.execute("""CREATE TABLE IF NOT EXISTS Login_Attempts (
+        attempt_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT NOT NULL,
+        attempted_at TEXT NOT NULL
+    )""")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_login_attempts ON Login_Attempts(username, attempted_at)")
+
+
+def _record_failed_login(conn, username, now):
+    conn.execute(
+        "INSERT INTO Login_Attempts(username, attempted_at) VALUES (?,?)",
+        (username, now.isoformat()),
+    )
+
+
 def authenticate_user(db_path, username, password):
+    """Fail-closed authentication with persistent bounded password attempts.
+
+    Eight failed attempts trigger a fifteen-minute per-username cooldown.
+    Also rate-limit by IP at the Railway/Cloudflare edge before broad launch.
+    """
     if not isinstance(username, str) or not isinstance(password, str):
         return None
     username = username.strip().lower()
-    if len(username) > 64 or len(password.encode("utf-8")) > 72:
+    if not username or len(username) > 64 or not password or len(password.encode("utf-8")) > 72:
         return None
-    with sqlite3.connect(db_path) as conn:
+    now = datetime.now(timezone.utc)
+    window = (now - timedelta(minutes=15)).isoformat()
+    with sqlite3.connect(db_path, timeout=15) as conn:
+        _init_login_tracking(conn)
+        recent_failures = conn.execute(
+            "SELECT COUNT(*) FROM Login_Attempts WHERE username=? AND attempted_at>=?",
+            (username, window),
+        ).fetchone()[0]
+        if recent_failures >= 8:
+            return None
         row = conn.execute(
             "SELECT user_id,username,full_name,role,theme_preference,password_hash "
             "FROM Users WHERE LOWER(username)=? AND is_active=1",
             (username,),
         ).fetchone()
-        if not row:
-            return None
-        stored_hash = row[5]
-        # Previously published demo credentials must never grant production access,
-        # including if they persisted from an earlier deployment.
-        exposed = {
+        known_demo_passwords = {
             hashlib.sha256(b"admin123").hexdigest(),
             hashlib.sha256(b"password1").hexdigest(),
         }
-        if not _is_demo_mode() and stored_hash in exposed:
-            return None
-        accepted, upgraded = _verify_password(password, stored_hash)
+        accepted = False
+        upgraded = None
+        if row and (_is_demo_mode() or row[5] not in known_demo_passwords):
+            accepted, upgraded = _verify_password(password, row[5])
         if not accepted:
+            _record_failed_login(conn, username, now)
             return None
         if upgraded:
             conn.execute("UPDATE Users SET password_hash=? WHERE user_id=?", (upgraded, row[0]))
+        conn.execute("UPDATE Users SET last_login=? WHERE user_id=?", (now.isoformat(), row[0]))
+        conn.execute("DELETE FROM Login_Attempts WHERE username=?", (username,))
+        # Bound table growth without storing passwords, tokens, IP addresses or user PII.
         conn.execute(
-            "UPDATE Users SET last_login=? WHERE user_id=?",
-            (datetime.now(timezone.utc).isoformat(), row[0]),
+            "DELETE FROM Login_Attempts WHERE attempted_at<?",
+            (now - timedelta(days=1)).isoformat(),
         )
         return tuple(row[:5])
 

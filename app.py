@@ -95,9 +95,17 @@ def render_mobile_nav():
 
 
 def main():
-    if os.environ.get("KHULA_PRODUCTION") == "1" and not os.path.isabs(DB_PATH):
-        st.error("Production requires KHULA_DB_PATH pointing to a persistent Railway volume or managed database.")
-        st.stop()
+    if os.environ.get("KHULA_PRODUCTION") == "1":
+        if os.environ.get("KHULA_DEMO_MODE") == "1":
+            st.error("Demo users and holdings are forbidden in production.")
+            st.stop()
+        mount_root = os.environ.get("KHULA_VOLUME_MOUNT", "/data")
+        if (not os.path.isabs(DB_PATH)
+                or not os.path.isabs(mount_root)
+                or not os.path.ismount(mount_root)
+                or os.path.commonpath((DB_PATH, mount_root)) != mount_root):
+            st.error("Production requires KHULA_DB_PATH on a verified persistent volume mount.")
+            st.stop()
     init_database()
     bootstrap_admin(DB_PATH)
 

@@ -10,6 +10,7 @@ import streamlit as st
 
 from khula_advisory_core import (
     affordable_units,
+    bank_snapshot_fresh,
     allocation_amounts,
     illustrative_allocation,
     no_growth_projection,
@@ -50,6 +51,13 @@ def _balance_summary():
         + snap["as_of"]
         + ". NOT a live bank balance and not independent audit confirmation."
     )
+    if not bank_snapshot_fresh(snap["as_of"]):
+        st.error(
+            "The bank snapshot is older than 14 days or has an invalid date. "
+            "Available savings and affordability scenarios are disabled until "
+            "an administrator checks a recent club bank statement."
+        )
+        return None
     return snap
 
 
@@ -101,6 +109,13 @@ def _render_quote(ticker, scenario_cash=None):
         st.caption(f"FX {quote['currency']}/ZAR {fx['rate']:.4f} · {fx['source']} as of {fx['as_of']}")
     if price_zar <= 0:
         st.warning("Invalid converted price.")
+        return
+    if quote["symbol"].endswith(".JO") or quote["exchange"].upper() == "JSE":
+        st.warning(
+            "Share-price units (rand versus cents) and applicable venue fees "
+            "require broker/provider verification. A quote is displayed for "
+            "research only; JSE purchase quantities are intentionally disabled."
+        )
         return
     units = affordable_units(scenario_cash, price_zar, exposure_limit_pct=10)
     st.info(

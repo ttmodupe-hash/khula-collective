@@ -9,6 +9,7 @@ from khula_pages1 import *
 from khula_pages2 import *
 from khula_pages3 import *
 from khula_security import bootstrap_admin
+from khula_sarb import render_sarb_page, render_sarb_panel
 from khula_member_services import (
     render_admin_reconciliation,
     render_club_goals,
@@ -126,6 +127,8 @@ def main():
 
     if not st.session_state.authenticated:
         render_login()
+        with st.expander('🇿🇦 See sourced South African economic indicators'):
+            render_sarb_panel(expanded=False)
         return
 
     with st.sidebar:
@@ -156,6 +159,7 @@ def main():
             ("voice", "🗳️ Member Voice"),
             ("constitution", "📜 Constitution"),
             ("goals", "🎯 Savings Goals"),
+            ("economy", "🇿🇦 SA Economic Data"),
             ("leaderboard", "🏆 Hall of Fame"),
             ("directory", "👥 Directory"),
             ("notifications", "🔔 Notifications"),
@@ -246,6 +250,8 @@ def main():
         render_ai_advisor()
     elif page == "global_markets":
         render_global_markets()
+    elif page == "economy":
+        render_sarb_page()
     elif page == "whatsapp":
         render_communications()
     elif page == "fnb_api_guide":

@@ -14,6 +14,8 @@ from khula_member_services import (
 )
 from khula_security import bootstrap_admin, authenticate_user, register_member
 from khula_invitations import generate_invitation
+from khula_bank_import import import_club_statement, unallocated_bank_credits, BankImportError
+from datetime import date
 
 
 class FinancialWorkflowTests(unittest.TestCase):
@@ -26,6 +28,7 @@ class FinancialWorkflowTests(unittest.TestCase):
             "KHULA_BOOTSTRAP_ADMIN_USER": "khulaadmin",
             "KHULA_BOOTSTRAP_ADMIN_PASSWORD": "CorrectHorseBatteryStaple2026!",
             "KHULA_DEMO_MODE": "0",
+            "KHULA_BANK_IMPORT_HMAC_KEY": "ThisIsATestOnly32CharacterSecretForBankRows",
         })
         self.env.start()
         config.init_database()
@@ -88,12 +91,27 @@ class FinancialWorkflowTests(unittest.TestCase):
             review_payment_claim(self.admin, claim, True, False, self.db)
         with self.assertRaises(PermissionError):
             review_payment_claim(self.member, claim, True, True, self.db)
-        self.assertTrue(review_payment_claim(self.admin, claim, True, True, self.db))
+        with self.assertRaises(BankImportError):
+            review_payment_claim(self.admin, claim, True, True, self.db)
+        csv_body = (
+            "Date,Amount,Reference,Description\\n"
+            f"{date.today().isoformat()},500.00,REF-TEST-2026,Member deposit\\n"
+        ).encode("utf-8")
+        imported = import_club_statement(self.db, self.admin, csv_body, source_checked=True)
+        self.assertEqual(imported["new_rows"], 1)
+        with self.assertRaises(BankImportError):
+            import_club_statement(self.db, self.admin, csv_body, source_checked=True)
+        evidence = unallocated_bank_credits(self.db, self.admin, 500)
+        self.assertEqual(len(evidence), 1)
+        self.assertTrue(review_payment_claim(
+            self.admin, claim, True, True, self.db, evidence_id=evidence[0][0]
+        ))
+        self.assertEqual(unallocated_bank_credits(self.db, self.admin, 500), [])
         with sqlite3.connect(self.db) as conn:
             amt = conn.execute("SELECT amount FROM Monthly_Contributions").fetchone()[0]
         self.assertEqual(amt, 500.0)
         with self.assertRaises(ValueError):
-            review_payment_claim(self.admin, claim, True, True, self.db)
+            review_payment_claim(self.admin, claim, True, True, self.db, evidence_id=evidence[0][0])
 
     def test_club_cash_requires_admin(self):
         with self.assertRaises(PermissionError):

@@ -103,7 +103,7 @@ def main():
         if (not os.path.isabs(DB_PATH)
                 or not os.path.isabs(mount_root)
                 or not os.path.ismount(mount_root)
-                or os.path.commonpath((DB_PATH, mount_root)) != mount_root):
+                or os.path.commonpath((os.path.realpath(DB_PATH), os.path.realpath(mount_root))) != os.path.realpath(mount_root)):
             st.error("Production requires KHULA_DB_PATH on a verified persistent volume mount.")
             st.stop()
     init_database()

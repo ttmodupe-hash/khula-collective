@@ -62,6 +62,16 @@ class FinancialWorkflowTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             hash_password("short")
 
+    def test_login_throttle_persists_in_database(self):
+        for _ in range(8):
+            self.assertIsNone(authenticate_user(self.db, "memberone", "WRONG-Password-2026!"))
+        self.assertIsNone(authenticate_user(self.db, "memberone", "StrongUniquePassword2026!"))
+        with sqlite3.connect(self.db) as conn:
+            recent = conn.execute(
+                "SELECT COUNT(*) FROM Login_Attempts WHERE username='memberone'"
+            ).fetchone()[0]
+            self.assertEqual(recent, 8)
+
     def test_invitation_cannot_be_skipped(self):
         with self.assertRaises(ValueError):
             register_member(self.db, "second", "Second Member", "second@example.invalid",

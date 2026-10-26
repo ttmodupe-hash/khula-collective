@@ -1,6 +1,7 @@
 import streamlit as st
 import sqlite3
 import os
+import time
 from datetime import datetime
 
 from khula_config import *
@@ -117,6 +118,31 @@ def main():
         st.session_state.authenticated = False
     if "nav_page" not in st.session_state:
         st.session_state.nav_page = "dashboard"
+
+    # Streamlit's tab-level state is not perpetual authorisation. Refresh
+    # server-side role/activation on every rerun and expire idle sessions.
+    if st.session_state.authenticated:
+        last_seen = st.session_state.get("_last_activity_monotonic")
+        now_monotonic = time.monotonic()
+        if last_seen is not None and now_monotonic - last_seen > 1800:
+            st.session_state.clear()
+            st.warning("Your session expired after 30 minutes of inactivity. Please sign in again.")
+            st.session_state.authenticated = False
+        else:
+            uid = st.session_state.get("user_id")
+            with sqlite3.connect(DB_PATH) as session_conn:
+                status = session_conn.execute(
+                    "SELECT role,is_active,full_name FROM Users WHERE user_id=?", (uid,)
+                ).fetchone() if uid is not None else None
+            if not status or status[1] != 1:
+                st.session_state.clear()
+                st.session_state.authenticated = False
+                st.warning("Account access is inactive. Please contact the club administrator.")
+            else:
+                st.session_state.role = status[0]
+                st.session_state.full_name = status[2]
+                st.session_state["_last_activity_monotonic"] = now_monotonic
+
 
     # Handle mobile nav query params
     query_params = st.query_params

@@ -11,6 +11,7 @@ import sqlite3
 from datetime import datetime, timezone
 
 import bcrypt
+from khula_invitations import email_normalised, verify_and_use_invitation
 
 
 def _is_demo_mode():
@@ -111,33 +112,37 @@ def bootstrap_admin(db_path):
 
 
 def registration_enabled():
-    return bool(os.environ.get("KHULA_INVITE_CODE", "")) and not _is_demo_mode()
+    # Real registration requires a unique, admin-issued invitation.
+    return not _is_demo_mode()
 
 
 def register_member(db_path, username, full_name, email, password, invite_code):
-    """Invitation-only registration. Neither role nor FICA status is user-supplied."""
-    expected = os.environ.get("KHULA_INVITE_CODE", "")
-    if not expected or len(expected) < 12:
-        raise ValueError("Member registration has not been configured.")
-    if not hmac.compare_digest(str(invite_code).encode("utf-8"), expected.encode("utf-8")):
-        raise ValueError("Invalid invitation code.")
+    """Create an inactive member using an individually issued one-time token.
+
+    The token and the account creation share the same SQLite transaction,
+    preventing simultaneous redemption or uninvited registration.
+    """
     username = str(username).strip().lower()
     full_name = str(full_name).strip()
-    email = str(email).strip().lower()
+    email = email_normalised(email)
     if not re.fullmatch(r"[a-z][a-z0-9_]{2,29}", username):
         raise ValueError("Use 3–30 letters, numbers or underscores; start with a letter.")
     if not (3 <= len(full_name) <= 120):
         raise ValueError("Please enter your full name.")
-    if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email) or len(email) > 254:
-        raise ValueError("Enter a valid email address.")
-    pwd = hash_password(password)
-    with sqlite3.connect(db_path) as conn:
+    password_hash = hash_password(password)
+    with sqlite3.connect(db_path, timeout=15) as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        if conn.execute("SELECT 1 FROM Users WHERE LOWER(email)=?", (email,)).fetchone():
+            raise ValueError("An account with this email already exists.")
+        # Member ID is created before token redemption but rolled back on error.
         try:
             cursor = conn.execute(
                 "INSERT INTO Users (username,password_hash,full_name,email,role,join_date,is_active,fica_verified) "
                 "VALUES (?,?,?,?,'member',?,0,0)",
-                (username, pwd, full_name, email, datetime.now(timezone.utc).isoformat()),
+                (username, password_hash, full_name, email,
+                 datetime.now(timezone.utc).isoformat()),
             )
         except sqlite3.IntegrityError as exc:
             raise ValueError("That username is already in use.") from exc
-    return cursor.lastrowid
+        verify_and_use_invitation(conn, email, invite_code, cursor.lastrowid)
+        return cursor.lastrowid

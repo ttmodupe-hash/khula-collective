@@ -1,3 +1,4 @@
+from khula_security import register_member, registration_enabled
 from khula_config import *
 from khula_utils import *
 import hashlib
@@ -56,6 +57,7 @@ def render_login():
                 return
             user = authenticate(username, password)
             if user:
+                st.session_state.authenticated = True
                 st.session_state.logged_in = True
                 st.session_state.user_id = user[0]
                 st.session_state.username = user[1]
@@ -69,12 +71,29 @@ def render_login():
             else:
                 st.error("Invalid username or password")
 
+    if registration_enabled():
+        with st.expander("New member? Register with your invitation"):
+            with st.form("member_registration"):
+                new_user = st.text_input("Choose username")
+                new_name = st.text_input("Full legal name")
+                new_email = st.text_input("Email")
+                new_password = st.text_input("Create a strong password (12+ characters)", type="password")
+                confirm_password = st.text_input("Confirm password", type="password")
+                invite = st.text_input("Invitation code", type="password")
+                if st.form_submit_button("Create member account"):
+                    if new_password != confirm_password:
+                        st.error("Passwords do not match.")
+                    else:
+                        try:
+                            register_member(DB_PATH, new_user, new_name, new_email, new_password, invite)
+                            st.success("Account created. Please sign in; member verification is still pending.")
+                        except ValueError as exc:
+                            st.error(str(exc))
+
     st.markdown("""
         </div>
         <div class='demo-box'>
-            <strong>Demo Credentials</strong><br>
-            Admin: <code>admin</code> / <code>admin123</code><br>
-            Member: <code>siphoo</code> / <code>password1</code>
+            Member onboarding is by invitation only. Please contact your club administrator.
         </div>
         <div class='powered-by'>Powered by FNB Open Banking API &middot; Global Market Intelligence</div>
     </div>
@@ -190,27 +209,8 @@ def render_dashboard():
                 st.session_state.nav_page = page
                 st.rerun()
 
-    # ── Market Snapshot ─────────────────────────────────────
-    st.subheader("SA Market Snapshot")
-    mcols = st.columns(5)
-    snapshot_items = [
-        ("JSE All Share", SA_MARKET_DATASET["jse_allshare"]),
-        ("USD/ZAR", SA_MARKET_DATASET["usd_zar"]),
-        ("Gold", SA_MARKET_DATASET["gold_price"]),
-        ("Brent Oil", SA_MARKET_DATASET["brent_oil"]),
-        ("SARB Rate", SA_MARKET_DATASET["sarb_rate"]),
-    ]
-    for col, (label, data) in zip(mcols, snapshot_items):
-        with col:
-            change_color = "#2ed573" if data["change"] >= 0 else "#ff4757"
-            change_sign = "+" if data["change"] >= 0 else ""
-            st.markdown(f"""
-            <div style='background:#1e1e30;padding:0.75rem;border-radius:12px;text-align:center;border:1px solid #2a2a40;'>
-                <div style='font-size:0.75rem;color:#a0a0b0;'>{label}</div>
-                <div style='font-size:1.1rem;font-weight:700;color:#ffffff;'>{data['value']:,.2f}</div>
-                <div style='font-size:0.75rem;color:{change_color};'>{change_sign}{data['change']}%</div>
-            </div>
-            """, unsafe_allow_html=True)
+    # Prices must come from a real provider, never seeded values.
+    st.info("Live market quotes appear in Global Markets when an authorised data provider is configured.")
 
 def render_fnb_sync():
     """FNB bank sync with statement upload."""
@@ -233,9 +233,7 @@ def render_fnb_sync():
     col1, col2 = st.columns(2)
     with col1:
         if st.button("Connect FNB Account", use_container_width=True, type="primary"):
-            st.info("FNB OAuth would open here in production. Simulating connection...")
-            time.sleep(1)
-            st.success("Simulated FNB connection successful!")
+            st.warning("Live FNB bank connection is not enabled. Use PDF/CSV statement import for review; it is not equivalent to a verified bank feed.")
     with col2:
         if st.button("Test API Connection", use_container_width=True):
             client = FNBAPIClient()
@@ -387,349 +385,15 @@ def render_payment_progress():
 
 # ── Global Markets Helpers ──────────────────────────────────
 
-def _get_region_flag(region):
-    flags = {"SA": "🇿🇦", "US": "🇺🇸", "EU": "🇪🇺", "EM": "🌏", "Crypto": "₿", "Commodity": "🛢️"}
-    return flags.get(region, "🌐")
-
-def _get_region_name(region):
-    names = {"SA": "South Africa / JSE", "US": "United States", "EU": "Europe", "EM": "Emerging Markets", "Crypto": "Cryptocurrency", "Commodity": "Commodities"}
-    return names.get(region, region)
-
-def _risk_badge(risk):
-    colors = {"low": ("#2ed573", "Low"), "medium": ("#ffa502", "Medium"), "high": ("#ff4757", "High")}
-    color, label = colors.get(risk, ("#a0a0b0", risk.title()))
-    return f"<span style='display:inline-block;padding:0.15rem 0.5rem;border-radius:8px;font-size:0.7rem;font-weight:600;background:{color}22;color:{color};'>{label}</span>"
-
-def _actionable_badge(actionable):
-    colors = {"buy": ("#2ed573", "BUY"), "watch": ("#ffa502", "WATCH"), "hold": ("#00b894", "HOLD"), "avoid": ("#ff4757", "AVOID")}
-    color, label = colors.get(actionable, ("#a0a0b0", actionable.upper()))
-    return f"<span style='display:inline-block;padding:0.15rem 0.5rem;border-radius:8px;font-size:0.7rem;font-weight:600;background:{color}33;color:{color};'>{label}</span>"
-
-def _format_market_cap(cap):
-    if cap is None or cap == "N/A":
-        return "N/A"
-    try:
-        val = float(cap)
-        if val >= 1e12:
-            return f"${val/1e12:.2f}T"
-        elif val >= 1e9:
-            return f"${val/1e9:.2f}B"
-        elif val >= 1e6:
-            return f"${val/1e6:.2f}M"
-        else:
-            return f"${val:,.0f}"
-    except:
-        return str(cap)
-
-def _convert_to_zar(price_usd, region):
-    if region == "SA":
-        return price_usd
-    if price_usd is None or price_usd == "N/A":
-        return None
-    try:
-        return float(price_usd) * ZAR_RATES.get("USD", 18.5)
-    except:
-        return None
-
-def _get_mock_market_data(ticker_info):
-    """Generate realistic mock market data when live API fails."""
-    random.seed(hash(ticker_info["ticker"]) % 10000)
-    base_prices = {
-        "SHP.JO": 28500, "AGL.JO": 62000, "MTN.JO": 15200, "NPN.JO": 320000, "FSR.JO": 6800,
-        "STX40.JO": 6500, "AAPL": 185, "MSFT": 420, "GOOGL": 175, "AMZN": 185,
-        "TSLA": 245, "NVDA": 890, "JPM": 195, "BRK-B": 415, "VOO": 470,
-        "SAP.DE": 185, "ASML.AS": 890, "NESN.SW": 105, "LVMH.PA": 875, "AIR.PA": 155,
-        "EXS1.DE": 52, "0700.HK": 385, "BABA": 78, "TCEHY": 42,
-        "BTC-USD": 68500, "ETH-USD": 3550, "GC=F": 2350, "CL=F": 82,
-    }
-    base = base_prices.get(ticker_info["ticker"], 100)
-    # Add some randomness
-    price = base * (1 + random.uniform(-0.05, 0.05))
-    change_pct = random.uniform(-3.5, 3.5)
-    pe = random.uniform(12, 35) if ticker_info["category"] == "stock" else None
-    div_yield = random.uniform(1.5, 4.5) if ticker_info["category"] == "stock" else (random.uniform(0, 0.5) if ticker_info["category"] == "crypto" else None)
-    mcap = base * random.uniform(1e8, 5e9) if ticker_info["category"] != "commodity" else None
-    return {
-        "price_usd": round(price, 2),
-        "change_pct": round(change_pct, 2),
-        "pe_ratio": round(pe, 2) if pe else None,
-        "dividend_yield": round(div_yield, 2) if div_yield else None,
-        "market_cap": mcap,
-    }
-
-def _calculate_affordability_cards(price_zar, bank_balance):
-    """Return affordability stats for an asset."""
-    if not price_zar or price_zar <= 0:
-        return None
-    units = int((bank_balance * 0.8) / price_zar) if bank_balance else 0
-    total = units * price_zar
-    return {
-        "units_affordable": units,
-        "total_cost_zar": round(total, 2),
-        "percent_of_balance": round((total / bank_balance * 100), 1) if bank_balance else 0,
-    }
-
-def _group_by_region(assets):
-    groups = {}
-    for a in assets:
-        r = a.get("region", "Other")
-        groups.setdefault(r, []).append(a)
-    return groups
-
-# ── AI Advisor ──────────────────────────────────────────────
-
-def generate_ai_response(question, context):
-    """Generate contextual AI advisor response based on user data and SA market knowledge."""
-    q_lower = question.lower()
-    user_risk = context.get("risk_profile", "moderate")
-    portfolio = context.get("portfolio_value", 0)
-    statement = context.get("statement_summary", {})
-    monthly_target = context.get("monthly_target", 500)
-    this_month = context.get("this_month_contrib", 0)
-
-    # Default greeting
-    if any(w in q_lower for w in ["hello", "hi", "hey", "greetings"]):
-        return f"Hello {context.get('user_name', 'there')}! I'm your Khula Collective AI Advisor. Ask me about JSE stocks, investment strategies, or your portfolio."
-
-    # Contribution advice
-    if any(w in q_lower for w in ["contribution", "payment", "monthly", "arrears", "owed"]):
-        if this_month >= monthly_target:
-            return f"Great job! You've contributed R{this_month:,.2f} this month (target: R{monthly_target:,.2f}). You're fully paid up. 🎉"
-        else:
-            shortfall = monthly_target - this_month
-            return f"You're R{shortfall:,.2f} short of your R{monthly_target:,.2f} monthly target. Consider topping up before the 7th to avoid penalties."
-
-    # Portfolio advice
-    if any(w in q_lower for w in ["portfolio", "returns", "performance", "how am i doing", "wealth"]):
-        if portfolio > 0:
-            return f"Your club portfolio is valued at R{portfolio:,.2f}. Based on your {user_risk} risk profile, consider rebalancing quarterly. Would you like specific JSE stock picks?"
-        return "Your portfolio is just getting started! Once contributions flow in, I can recommend allocation strategies tailored to your risk profile."
-
-    # JSE / Stock picks
-    if any(w in q_lower for w in ["jse", "stock", "share", "pick", "buy", "invest", "anglo", "sasol", "naspers", "shoprite", "satrix"]):
-        picks = AI_ADVISOR_KNOWLEDGE["jse_sectors"]
-        if "resource" in q_lower or "mining" in q_lower or "anglo" in q_lower or "sibanye" in q_lower or "gold" in q_lower:
-            sector = picks["resources"]
-            return f"Resources outlook: {sector['outlook'].title()}. Key drivers: {', '.join(sector['drivers'])}. Top picks: {', '.join(sector['top_picks'])}. Risk: {sector['risk'].title()}."
-        if "bank" in q_lower or "financial" in q_lower or "firstrand" in q_lower or "standard" in q_lower:
-            sector = picks["financials"]
-            return f"Financials outlook: {sector['outlook'].title()}. Key drivers: {', '.join(sector['drivers'])}. Top picks: {', '.join(sector['top_picks'])}. Risk: {sector['risk'].title()}."
-        if "property" in q_lower or "reit" in q_lower or "growthpoint" in q_lower:
-            sector = picks["property"]
-            return f"Property outlook: {sector['outlook'].title()}. Key drivers: {', '.join(sector['drivers'])}. Top picks: {', '.join(sector['top_picks'])}. Risk: {sector['risk'].title()}."
-        if "tech" in q_lower or "naspers" in q_lower or "prosus" in q_lower or "tencent" in q_lower:
-            sector = picks["tech"]
-            return f"Tech outlook: {sector['outlook'].title()}. Key drivers: {', '.join(sector['drivers'])}. Top picks: {', '.join(sector['top_picks'])}. Risk: {sector['risk'].title()}."
-        # General JSE
-        strategies = AI_ADVISOR_KNOWLEDGE["stokvel_strategies"]
-        return f"For a {user_risk} risk profile, here's a proven stokvel strategy: {'; '.join(strategies)}. Want me to analyse a specific sector?"
-
-    # Risk profile
-    if any(w in q_lower for w in ["risk", "conservative", "moderate", "aggressive", "safe"]):
-        profile = AI_ADVISOR_KNOWLEDGE["risk_profiles"].get(user_risk, AI_ADVISOR_KNOWLEDGE["risk_profiles"]["moderate"])
-        return f"Your current profile is **{user_risk.title()}**. Recommended allocation: Bonds {profile['allocation']['bonds']}%, Cash {profile['allocation']['cash']}%, Equity {profile['allocation']['equity']}%, Crypto {profile['allocation']['crypto']}%. Expected return: {profile['expected_return']}."
-
-    # Statement analysis
-    if any(w in q_lower for w in ["statement", "bank", "spending", "income", "expense", "budget"]):
-        if statement.get("total_income", 0) > 0:
-            return f"From your bank statements: Income R{statement['total_income']:,.2f}, Expenses R{statement['total_expenses']:,.2f}, Net R{statement['net_flow']:,.2f}. I detected {statement.get('contribution_count', 0)} Khula contributions."
-        return "Upload your FNB statement on the Bank Sync page and I'll analyse your spending patterns and contribution capacity."
-
-    # Market / general
-    if any(w in q_lower for w in ["market", "rand", "usd", "interest rate", "sarb", "inflation", "economy"]):
-        return f"Latest SA market: JSE All Share {SA_MARKET_DATASET['jse_allshare']['value']:,} ({SA_MARKET_DATASET['jse_allshare']['change']:+.1f}%), USD/ZAR R{SA_MARKET_DATASET['usd_zar']['value']:.2f}, SARB rate {SA_MARKET_DATASET['sarb_rate']['value']:.2f}%. Gold is at R{SA_MARKET_DATASET['gold_price']['value']:,.0f}/oz."
-
-    # FNB / Crypto
-    if any(w in q_lower for w in ["fnb", "bank", "sync", "api"]):
-        return "FNB Open Banking integration allows automatic transaction sync. You can also upload PDF or CSV statements. Connect on the Bank Sync page."
-
-    if any(w in q_lower for w in ["bitcoin", "btc", "crypto", "ethereum", "eth"]):
-        return "Cryptocurrency is available as a high-risk allocation (up to 15% for aggressive profiles). Consider BTC and ETH via regulated SA exchanges like Luno or VALR."
-
-    # Fallback
-    return f"I'm your Khula Collective AI Advisor. I can help with JSE stock picks, contribution tracking, portfolio allocation, and market updates. Your current risk profile: {user_risk.title()}. What would you like to explore?"
+# The v3 static market snapshots and synthetic stock picks were removed from the
+# active user experience. See khula_intelligence for a source-labelled feed and
+# conservative savings-based educational guidance.
 
 def render_ai_advisor():
-    """AI Advisor page with chat interface and contextual insights."""
-    track_feature_usage(st.session_state.user_id, "ai_advisor")
-    st.markdown("""
-    <div class='main-header'>
-        <h1>🤖 AI Advisor</h1>
-        <p>Smart investment insights powered by your data</p>
-    </div>
-    """, unsafe_allow_html=True)
+    from khula_intelligence import render_investment_guide
+    return render_investment_guide()
 
-    context = get_ai_context(st.session_state.user_id)
-
-    # Context summary
-    with st.expander("📊 Your Context", expanded=False):
-        st.write(f"**Risk Profile:** {context['risk_profile'].title()}")
-        st.write(f"**Portfolio Value:** R{context['portfolio_value']:,.2f}")
-        st.write(f"**Monthly Target:** R{context['monthly_target']:,.2f}")
-        st.write(f"**This Month Contributed:** R{context['this_month_contrib']:,.2f}")
-        stmt = context.get("statement_summary", {})
-        if stmt.get("total_income", 0) > 0:
-            st.write(f"**Statement Income:** R{stmt['total_income']:,.2f}")
-            st.write(f"**Statement Expenses:** R{stmt['total_expenses']:,.2f}")
-
-    # Quick questions
-    st.subheader("Quick Questions")
-    quick_qs = [
-        "How is my portfolio doing?",
-        "What JSE stocks should I buy?",
-        "Am I on track with contributions?",
-        "What's the market outlook?",
-        "Should I invest in property REITs?",
-    ]
-    qcols = st.columns(len(quick_qs))
-    selected_q = None
-    for col, q in zip(qcols, quick_qs):
-        with col:
-            if st.button(q, key=f"qq_{q[:20]}", use_container_width=True):
-                selected_q = q
-
-    # Chat interface
-    st.subheader("Ask Your AI Advisor")
-    user_q = st.text_input("Your question", value=selected_q or "", placeholder="e.g., What JSE stocks are good for moderate risk?")
-
-    if st.button("Get Advice", type="primary", use_container_width=True) or selected_q:
-        if user_q:
-            with st.spinner("Analysing..."):
-                time.sleep(0.5)
-                response = generate_ai_response(user_q, context)
-                save_ai_conversation(st.session_state.user_id, user_q, response, context)
-            st.markdown(f"""
-            <div style='background:#1e1e30;padding:1rem;border-radius:12px;border:1px solid #2a2a40;margin-top:1rem;'>
-                <p style='color:#00b894;font-weight:600;margin:0;'>🤖 AI Advisor</p>
-                <p style='margin:0.5rem 0 0 0;'>{response}</p>
-            </div>
-            """, unsafe_allow_html=True)
-
-    # Conversation history
-    history = get_ai_conversation_history(st.session_state.user_id, limit=5)
-    if history:
-        st.subheader("Recent Conversations")
-        for q, r, created in history:
-            with st.expander(f"🧑 {q[:60]}..."):
-                st.write(f"**AI:** {r}")
-                st.caption(f"{created[:16] if created else ''}")
 
 def render_global_markets():
-    """Dedicated Global Markets Explorer — browse all investable assets worldwide."""
-    track_feature_usage(st.session_state.user_id, "global_markets")
-    st.markdown("""
-    <div class='main-header'>
-        <h1>🌍 Global Markets</h1>
-        <p>Explore investment opportunities across JSE, NYSE, LSE, crypto &amp; commodities</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # Bank balance for affordability
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("SELECT COALESCE(SUM(current_value), 0) FROM Investments")
-    portfolio_value = c.fetchone()[0] or 0
-    c.execute("SELECT COALESCE(SUM(amount), 0) FROM Monthly_Contributions WHERE status='paid'")
-    total_contributions = c.fetchone()[0] or 0
-    conn.close()
-    bank_balance = portfolio_value + total_contributions
-
-    # ── Filters ─────────────────────────────────────────────
-    st.markdown("<div style='margin-bottom:1rem;'></div>", unsafe_allow_html=True)
-    f1, f2, f3, f4 = st.columns(4)
-    with f1:
-        region_filter = st.multiselect("Region", ["SA", "US", "EU", "EM", "Crypto", "Commodity"], default=[])
-    with f2:
-        risk_filter = st.multiselect("Risk", ["low", "medium", "high"], default=[])
-    with f3:
-        cat_filter = st.multiselect("Category", ["stock", "etf", "crypto", "commodity"], default=[])
-    with f4:
-        sort_by = st.selectbox("Sort", ["Name", "Price (High-Low)", "Price (Low-High)", "Region"], index=0)
-
-    # ── Fetch / Mock Data ───────────────────────────────────
-    assets = []
-    for t in GLOBAL_TICKER_UNIVERSE:
-        if region_filter and t["region"] not in region_filter:
-            continue
-        if risk_filter and t["risk_level"] not in risk_filter:
-            continue
-        if cat_filter and t["category"] not in cat_filter:
-            continue
-
-        mock = _get_mock_market_data(t)
-        price_zar = _convert_to_zar(mock["price_usd"], t["region"])
-        afford = _calculate_affordability_cards(price_zar, bank_balance)
-
-        assets.append({
-            **t,
-            "price_usd": mock["price_usd"],
-            "price_zar": price_zar,
-            "change_pct": mock["change_pct"],
-            "pe_ratio": mock["pe_ratio"],
-            "dividend_yield": mock["dividend_yield"],
-            "market_cap": _format_market_cap(mock["market_cap"]),
-            "affordability": afford,
-        })
-
-    if sort_by == "Price (High-Low)":
-        assets.sort(key=lambda x: x["price_zar"] or 0, reverse=True)
-    elif sort_by == "Price (Low-High)":
-        assets.sort(key=lambda x: x["price_zar"] or float('inf'))
-    elif sort_by == "Region":
-        assets.sort(key=lambda x: x["region"])
-    else:
-        assets.sort(key=lambda x: x["name"])
-
-    if not assets:
-        st.info("No assets match your filters. Try adjusting your criteria.")
-        return
-
-    # ── Summary ─────────────────────────────────────────────
-    st.markdown(f"""
-    <p style='color:#a0a0b0;font-size:0.9rem;'>
-        Showing <strong>{len(assets)}</strong> assets 
-        &middot; Estimated balance: <strong>R{bank_balance:,.0f}</strong>
-    </p>
-    """, unsafe_allow_html=True)
-
-    # ── Asset Cards ─────────────────────────────────────────
-    grouped = _group_by_region(assets)
-    for region, group in grouped.items():
-        st.subheader(f"{_get_region_flag(region)} {_get_region_name(region)}")
-        cols = st.columns(2)
-        for i, a in enumerate(group):
-            with cols[i % 2]:
-                change_color = "#2ed573" if a["change_pct"] >= 0 else "#ff4757"
-                change_sign = "+" if a["change_pct"] >= 0 else ""
-                price_display = f"R{a['price_zar']:,.2f}" if a["price_zar"] else "N/A"
-
-                afford_html = ""
-                if a["affordability"] and a["affordability"]["units_affordable"] > 0:
-                    afford_html = f"<p style='font-size:0.8rem;color:#00b894;margin:0;'>💰 You can afford <strong>{a['affordability']['units_affordable']}</strong> units (R{a['affordability']['total_cost_zar']:,.0f})</p>"
-                elif a["affordability"]:
-                    afford_html = f"<p style='font-size:0.8rem;color:#ff4757;margin:0;'>⚠️ Requires R{a['price_zar']:,.0f} per unit — beyond 80% balance limit</p>"
-
-                pe_display = f"P/E: {a['pe_ratio']:.1f}" if a['pe_ratio'] else ""
-                div_display = f"Div: {a['dividend_yield']:.1f}%" if a['dividend_yield'] else ""
-                meta = " &middot; ".join(filter(None, [a["exchange"], pe_display, div_display, a["market_cap"]]))
-
-                st.markdown(f"""
-                <div style='background:#1e1e30;padding:1rem;border-radius:14px;border:1px solid #2a2a40;margin-bottom:0.75rem;'>
-                    <div style='display:flex;justify-content:space-between;align-items:center;'>
-                        <span style='font-weight:700;font-size:1rem;'>{a['name']}</span>
-                        {_risk_badge(a['risk_level'])}
-                    </div>
-                    <p style='font-size:0.8rem;color:#a0a0b0;margin:0;'>{a['ticker']} &middot; {meta}</p>
-                    <div style='display:flex;justify-content:space-between;align-items:center;margin-top:0.5rem;'>
-                        <span style='font-size:1.3rem;font-weight:700;color:#ffffff;'>{price_display}</span>
-                        <span style='color:{change_color};font-weight:600;'>{change_sign}{a['change_pct']:.2f}%</span>
-                    </div>
-                    {afford_html}
-                </div>
-                """, unsafe_allow_html=True)
-
-                if st.button(f"View {a['name']}", key=f"view_{a['ticker']}", use_container_width=True):
-                    st.session_state.selected_ticker = a
-                    st.info(f"Selected {a['name']} ({a['ticker']}) at {price_display}. This would open a detail view in production.")
-
-# End of khula_pages1.py
+    from khula_intelligence import render_market_explorer
+    return render_market_explorer()

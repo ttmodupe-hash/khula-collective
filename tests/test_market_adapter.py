@@ -23,14 +23,38 @@ class MarketAdapterTests(unittest.TestCase):
         r = Mock()
         r.json.return_value = {
             "symbol": "AAPL", "name": "Apple", "close": "100.21", "currency": "USD",
-            "exchange": "NASDAQ", "timestamp": 1760000000
+            "exchange": "NASDAQ", "timestamp": int(datetime.now(timezone.utc).timestamp())
         }
         get.return_value = r
         result = fetch_quote("AAPL")
         self.assertEqual(result["source"], "Twelve Data")
         self.assertEqual(result["currency"], "USD")
         self.assertEqual(str(result["price"]), "100.21")
-        self.assertIn("2025", result["as_of"])
+        self.assertIn(str(datetime.now(timezone.utc).year), result["as_of"])
+
+    @patch("khula_market_data.requests.get")
+    def test_original_jse_symbol_is_translated_for_provider(self, get):
+        r = Mock()
+        r.json.return_value = {
+            "symbol": "SHP", "close": "250.0", "currency": "ZAR",
+            "exchange": "JSE", "timestamp": int(datetime.now(timezone.utc).timestamp())
+        }
+        get.return_value = r
+        result = fetch_quote("SHP.JO")
+        self.assertEqual(result["symbol"], "SHP.JO")
+        kwargs = get.call_args.kwargs
+        self.assertEqual(kwargs["params"]["symbol"], "SHP")
+        self.assertEqual(kwargs["params"]["exchange"], "JSE")
+
+    @patch("khula_market_data.requests.get")
+    def test_stale_quote_fails_closed(self, get):
+        r = Mock()
+        r.json.return_value = {
+            "close": "10", "currency": "ZAR", "timestamp": 1760000000
+        }
+        get.return_value = r
+        with self.assertRaises(MarketDataError):
+            fetch_quote("SHP.JO")
 
     @patch("khula_market_data.requests.get")
     def test_no_invented_price_on_failure(self, get):

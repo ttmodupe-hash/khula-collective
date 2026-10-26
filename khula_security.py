@@ -18,8 +18,8 @@ def _is_demo_mode():
 
 
 def hash_password(password):
-    if len(password.encode("utf-8")) < 12 or len(password.encode("utf-8")) > 128:
-        raise ValueError("Use a password between 12 and 128 UTF-8 bytes.")
+    if len(password.encode("utf-8")) < 12 or len(password.encode("utf-8")) > 72:
+        raise ValueError("Use a password between 12 and 72 UTF-8 bytes.")
     return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt(rounds=12)).decode("ascii")
 
 
@@ -50,7 +50,7 @@ def authenticate_user(db_path, username, password):
     if not isinstance(username, str) or not isinstance(password, str):
         return None
     username = username.strip().lower()
-    if len(username) > 64 or len(password.encode("utf-8")) > 128:
+    if len(username) > 64 or len(password.encode("utf-8")) > 72:
         return None
     with sqlite3.connect(db_path) as conn:
         row = conn.execute(

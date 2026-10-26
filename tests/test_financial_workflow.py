@@ -104,8 +104,8 @@ class FinancialWorkflowTests(unittest.TestCase):
         with self.assertRaises(BankImportError):
             review_payment_claim(self.admin, claim, True, True, self.db)
         csv_body = (
-            "Date,Amount,Reference,Description\\n"
-            f"{date.today().isoformat()},500.00,REF-TEST-2026,Member deposit\\n"
+            "Date,Amount,Reference,Description\n"
+            f"{date.today().isoformat()},500.00,REF-TEST-2026,Member deposit\n"
         ).encode("utf-8")
         imported = import_club_statement(self.db, self.admin, csv_body, source_checked=True)
         self.assertEqual(imported["new_rows"], 1)

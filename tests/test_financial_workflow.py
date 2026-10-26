@@ -13,6 +13,7 @@ from khula_member_services import (
     update_member_access,
 )
 from khula_security import bootstrap_admin, authenticate_user, register_member
+from khula_invitations import generate_invitation
 
 
 class FinancialWorkflowTests(unittest.TestCase):
@@ -24,16 +25,16 @@ class FinancialWorkflowTests(unittest.TestCase):
         self.env = patch.dict(os.environ, {
             "KHULA_BOOTSTRAP_ADMIN_USER": "khulaadmin",
             "KHULA_BOOTSTRAP_ADMIN_PASSWORD": "CorrectHorseBatteryStaple2026!",
-            "KHULA_INVITE_CODE": "KhulaPrivateInvite2026!!",
             "KHULA_DEMO_MODE": "0",
         })
         self.env.start()
         config.init_database()
         self.assertTrue(bootstrap_admin(self.db))
         self.admin = authenticate_user(self.db, "khulaadmin", "CorrectHorseBatteryStaple2026!")[0]
+        self.invite = generate_invitation(self.db, self.admin, "member@example.invalid")
         self.member = register_member(self.db, "memberone", "Demo Member One",
                                       "member@example.invalid", "StrongUniquePassword2026!",
-                                      "KhulaPrivateInvite2026!!")
+                                      self.invite)
         # Invitation alone is not approval to access private club data.
         self.assertIsNone(authenticate_user(self.db, "memberone", "StrongUniquePassword2026!"))
         update_member_access(self.admin, self.member, "member", True, self.db)
@@ -62,6 +63,21 @@ class FinancialWorkflowTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             register_member(self.db, "second", "Second Member", "second@example.invalid",
                             "LongPasswordVersion2026!", "invalid")
+
+    def test_invitation_cannot_be_used_twice_or_for_other_email(self):
+        with self.assertRaises(ValueError):
+            register_member(self.db, "third", "Third Person", "third@example.invalid",
+                            "LongPasswordVersion2026!", self.invite)
+        fresh = generate_invitation(self.db, self.admin, "second@example.invalid")
+        with self.assertRaises(ValueError):
+            register_member(self.db, "fourth", "Other Person", "other@example.invalid",
+                            "LongPasswordVersion2026!", fresh)
+        new_id = register_member(self.db, "second", "Second Member",
+                                 "second@example.invalid", "LongPasswordVersion2026!", fresh)
+        self.assertIsNotNone(new_id)
+        with self.assertRaises(ValueError):
+            register_member(self.db, "third", "Third Person",
+                            "second@example.invalid", "LongPasswordVersion2026!", fresh)
 
     def test_claim_never_posts_to_paid_ledger_without_admin_review(self):
         claim = submit_payment_claim(self.member, 2026, 10, 500, "EFT", "REF-TEST-2026", self.db)

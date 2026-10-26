@@ -1,3 +1,4 @@
+from khula_member_services import update_member_access
 from khula_governance import cast_vote, close_expired_proposals
 from khula_config import *
 from khula_utils import *
@@ -217,27 +218,28 @@ def render_admin():
 
         for u in users:
             uid, uname, name, email, role, active, contrib, fica = u
-            col1, col2, col3 = st.columns([3, 1, 1])
+            st.write(f"**{name}** (@{uname}) — {email or 'No email'}")
+            col1, col2, col3 = st.columns([2, 2, 1])
             with col1:
-                st.write(f"**{name}** (@{uname}) — {email or 'No email'}")
+                next_role = st.selectbox(
+                    "Role", ["member", "admin"],
+                    index=0 if role == "member" else 1, key=f"role_{uid}"
+                )
             with col2:
-                new_role = st.selectbox("Role", ["member", "admin"], index=0 if role == "member" else 1, key=f"role_{uid}")
-                if new_role != role:
-                    conn = sqlite3.connect(DB_PATH)
-                    c = conn.cursor()
-                    c.execute("UPDATE Users SET role=? WHERE user_id=?", (new_role, uid))
-                    conn.commit()
-                    conn.close()
-                    st.rerun()
+                next_active = st.checkbox(
+                    "Active (approval)", value=bool(active), key=f"active_{uid}"
+                )
             with col3:
-                toggle = st.toggle("Active", value=bool(active), key=f"active_{uid}")
-                if toggle != bool(active):
-                    conn = sqlite3.connect(DB_PATH)
-                    c = conn.cursor()
-                    c.execute("UPDATE Users SET is_active=? WHERE user_id=?", (1 if toggle else 0, uid))
-                    conn.commit()
-                    conn.close()
-                    st.rerun()
+                if st.button("Save", key=f"save_access_{uid}"):
+                    try:
+                        update_member_access(
+                            st.session_state.user_id, uid, next_role, bool(next_active)
+                        )
+                        st.success("Member access saved in the audit log.")
+                        st.rerun()
+                    except (ValueError, PermissionError) as exc:
+                        st.error(str(exc))
+            st.divider()
 
     with tab2:
         st.subheader("Add Investment")

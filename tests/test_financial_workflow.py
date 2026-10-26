@@ -51,6 +51,13 @@ class FinancialWorkflowTests(unittest.TestCase):
         self.assertIsNone(authenticate_user(self.db, "admin", "admin123"))
         self.assertIsNotNone(authenticate_user(self.db, "memberone", "StrongUniquePassword2026!"))
 
+    def test_bcrypt_rejects_excessively_long_passwords(self):
+        from khula_security import hash_password
+        with self.assertRaises(ValueError):
+            hash_password("a" * 80)
+        with self.assertRaises(ValueError):
+            hash_password("short")
+
     def test_invitation_cannot_be_skipped(self):
         with self.assertRaises(ValueError):
             register_member(self.db, "second", "Second Member", "second@example.invalid",

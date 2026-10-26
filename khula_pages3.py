@@ -1,6 +1,7 @@
 from khula_config import *
 from khula_utils import *
 import json
+from html import escape
 
 # ============================================================
 # PAGE 3: Member Voice, Constitution, Directory, Reports, Admin
@@ -48,6 +49,7 @@ def render_member_voice():
 
     for prop in proposals:
         pid, title, desc, proposed_by, status, created, closes, vfor, vagainst = prop
+        title, desc = escape(str(title or '')), escape(str(desc or ''))
         total_votes = vfor + vagainst
         pct_for = (vfor / total_votes * 100) if total_votes > 0 else 0
         pct_against = (vagainst / total_votes * 100) if total_votes > 0 else 0
@@ -134,6 +136,13 @@ def render_directory():
 
     for m in members:
         uid, name, email, phone, role, fica, joined, active = m
+        # Contact details are personal information: members only see names.
+        if st.session_state.get("role") != "admin":
+            email = None
+            phone = None
+        name = escape(str(name or "Member"))
+        email = escape(str(email)) if email else None
+        phone = escape(str(phone)) if phone else None
         fica_badge = "✅ FICA Verified" if fica else "⚠️ FICA Pending"
         status_color = "#2ed573" if active else "#ff4757"
         with st.container():
@@ -172,6 +181,12 @@ def render_reports():
         df_c = pd.DataFrame(contrib, columns=["Member", "Total Contributions"])
         fig2 = px.bar(df_c, x="Member", y="Total Contributions", title="Total Contributions by Member")
         st.plotly_chart(fig2, use_container_width=True)
+
+    # Sensitive exports are available to administrators only.
+    if st.session_state.get("role") != "admin":
+        st.caption("Member-level CSV exports are restricted to administrators.")
+        conn.close()
+        return
 
     # Download data
     st.subheader("Export Data")
@@ -283,7 +298,7 @@ def render_profile():
         new_name = st.text_input("Full Name", value=full_name or "")
         new_email = st.text_input("Email", value=email or "")
         new_phone = st.text_input("Phone", value=phone or "")
-        new_contrib = st.number_input("Monthly Contribution (R)", min_value=100.0, value=float(contrib or 500), step=50.0)
+        st.caption(f"Club-assigned monthly target: R{float(contrib or 0):,.2f}. Only an administrator can change this.")
         new_theme = st.selectbox("Theme", ["dark", "light"], index=0 if theme == "dark" else 1)
         new_risk = st.selectbox("Risk Profile", ["conservative", "moderate", "aggressive"], index=["conservative", "moderate", "aggressive"].index(risk or "moderate"))
         new_notif = st.multiselect("Notifications", ["all", "payments", "votes", "ai_advisor", "none"], default=(notif or "all").split(",") if notif else ["all"])
@@ -291,9 +306,9 @@ def render_profile():
         if st.form_submit_button("💾 Save Changes", use_container_width=True):
             conn = sqlite3.connect(DB_PATH)
             c = conn.cursor()
-            c.execute("""UPDATE Users SET full_name=?, email=?, phone=?, monthly_contribution=?,
+            c.execute("""UPDATE Users SET full_name=?, email=?, phone=?,
                       theme_preference=?, risk_profile=?, notification_prefs=? WHERE user_id=?""",
-                      (new_name, new_email, new_phone, new_contrib, new_theme, new_risk, ",".join(new_notif), st.session_state.user_id))
+                      (new_name, new_email, new_phone, new_theme, new_risk, ",".join(new_notif), st.session_state.user_id))
             conn.commit()
             conn.close()
             st.session_state.theme = new_theme
@@ -327,7 +342,7 @@ def render_notifications():
             """, unsafe_allow_html=True)
             if not is_read:
                 if st.button("Mark as read", key=f"read_{nid}"):
-                    mark_notification_read(nid)
+                    mark_notification_read(nid, st.session_state.user_id)
                     st.rerun()
 
 def render_whatsapp():

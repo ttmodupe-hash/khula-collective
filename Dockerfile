@@ -42,6 +42,7 @@ COPY khula_recovery.py .
 COPY khula_compliance.py .
 COPY khula_bank_access.py .
 COPY khula_applications.py .
+COPY khula_compass.py .
 COPY khula_intelligence.py .
 COPY khula_entrypoint.sh /usr/local/bin/khula-entrypoint
 COPY .streamlit/ .streamlit/

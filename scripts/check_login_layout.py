@@ -22,7 +22,7 @@ def check(url, screenshot_dir):
                 page = browser.new_page(viewport={"width": width, "height": height},
                                         device_scale_factor=1)
                 page.goto(url, wait_until="domcontentloaded", timeout=45000)
-                username = page.get_by_role("textbox", name="Username", exact=True)
+                username = page.get_by_role("textbox", name="Username or email", exact=True)
                 username.wait_for(state="visible", timeout=45000)
                 page.get_by_text("Welcome back", exact=True).wait_for(
                     state="visible", timeout=45000)

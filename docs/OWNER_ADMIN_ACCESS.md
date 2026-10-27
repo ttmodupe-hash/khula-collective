@@ -1,6 +1,38 @@
 # Khula Collective — secure owner administrator activation
 **27 October 2026**
 
+## Owner login recovery update
+
+The owner URL now opens **Set up or recover your Khula owner login** above
+normal sign-in. With a fresh private code, the owner chooses a new password
+of 12–72 UTF-8 bytes and explicitly authorises setup or recovery. The form
+creates a first-time owner, or resets the same previously activated owner
+account and displays its actual username for sign-in. Passwords and code
+widgets are cleared on success. No owner is signed in automatically.
+
+Recovery requires the current independently verified owner email, an unused,
+unexpired challenge, exactly one matching `Owner_Admin_Activations` receipt,
+and an active admin account. Shared names/emails cannot claim an unrelated
+admin or member. Multiple matching owner receipts, disabled admins and demoted
+owners fail closed. Account recovery never restores revoked access.
+
+Every recovery atomically consumes its fresh challenge in
+`Owner_Admin_Recovery_Uses`, replaces the password hash, increments `auth_epoch`
+to invalidate old sessions, clears that owner's login cooldown and records an
+audit event. Activation and recovery both reject a code consumed by either
+flow. Concurrent recovery attempts cannot both succeed. First-time activation
+cannot silently create a second owner account for the same verified email.
+
+Normal sign-in now accepts a username or a unique account email. If multiple
+accounts share an email, the user must use their unique username. Email and
+username attempts share the same persistent cooldown. No public account
+existence or role is disclosed on failed login.
+
+Changing `KHULA_BOOTSTRAP_ADMIN_PASSWORD` alone never rotates an existing
+database password. Retire bootstrap credentials only after verified owner
+access and a reviewed account-access decision. This recovery change does not
+enforce sole-approver policy or open real-member onboarding.
+
 ## Account purpose
 
 The connected Railway project operator needs an **active administrator account**
@@ -33,12 +65,13 @@ public membership registration and grants no permission to another member.
 5. Owner enters their verified email, code, a new unique administrator username
    and strong password (12–72 UTF-8 bytes), then confirms their rights
    and consent to overseas hosting.
-6. An atomic transaction checks the SHA-256 challenge using constant-time
+6. For first-time setup, an atomic transaction checks the SHA-256 challenge using constant-time
    comparison, expiry, exact owner email and original username availability;
    it creates a separate `role='admin',is_active=1` account, records a
    one-time consumption receipt and logs an administrative audit event.
-   A previously existing member or admin is **not silently promoted,
-   demoted, deleted or overwritten**.
+   An unrelated member/admin is not promoted, demoted, deleted or overwritten.
+   For an existing proven owner, the explicit recovery flow above resets only
+   that owner's password and session epoch without changing role or status.
 7. Khula clears the activation form's password/code from the browser session
    and returns to the regular sign-in form. The owner signs in with their
    chosen credentials and opens **Membership Approvals** in the sidebar.

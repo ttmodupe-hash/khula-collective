@@ -67,44 +67,51 @@ def _record_failed_login(conn, username, now):
 def authenticate_user(db_path, username, password):
     """Fail-closed authentication with persistent bounded password attempts.
 
-    Eight failed attempts trigger a fifteen-minute per-username cooldown.
+    Username or an unambiguous account email may be used. Both identifiers
+    share the same account cooldown; duplicate emails fail closed.
+    Eight failed attempts trigger a fifteen-minute per-account cooldown.
     Also rate-limit by IP at the Railway/Cloudflare edge before broad launch.
     """
     if not isinstance(username, str) or not isinstance(password, str):
         return None
     username = username.strip().lower()
-    if not username or len(username) > 64 or not password or len(password.encode("utf-8")) > 72:
+    if not username or len(username) > 254 or not password or len(password.encode("utf-8")) > 72:
         return None
     now = datetime.now(timezone.utc)
     window = (now - timedelta(minutes=15)).isoformat()
     with sqlite3.connect(db_path, timeout=15) as conn:
+        conn.execute("BEGIN IMMEDIATE")
         _init_login_tracking(conn)
+        column = "email" if "@" in username else "username"
+        candidates = conn.execute(
+            "SELECT user_id,username,full_name,role,theme_preference,password_hash,is_active "
+            "FROM Users WHERE LOWER(" + column + ")=? LIMIT 2",
+            (username,),
+        ).fetchall()
+        row = candidates[0] if len(candidates) == 1 else None
+        # Alternating email and username must not bypass an account cooldown.
+        account_key = row[1].strip().lower() if row else username
         recent_failures = conn.execute(
-            "SELECT COUNT(*) FROM Login_Attempts WHERE username=? AND attempted_at>=?",
-            (username, window),
+            "SELECT COUNT(*) FROM Login_Attempts WHERE username IN (?,?) AND attempted_at>=?",
+            (account_key, username, window),
         ).fetchone()[0]
         if recent_failures >= 8:
             return None
-        row = conn.execute(
-            "SELECT user_id,username,full_name,role,theme_preference,password_hash "
-            "FROM Users WHERE LOWER(username)=? AND is_active=1",
-            (username,),
-        ).fetchone()
         known_demo_passwords = {
             hashlib.sha256(b"admin123").hexdigest(),
             hashlib.sha256(b"password1").hexdigest(),
         }
         accepted = False
         upgraded = None
-        if row and (_is_demo_mode() or row[5] not in known_demo_passwords):
+        if row and row[6] == 1 and (_is_demo_mode() or row[5] not in known_demo_passwords):
             accepted, upgraded = _verify_password(password, row[5])
         if not accepted:
-            _record_failed_login(conn, username, now)
+            _record_failed_login(conn, account_key, now)
             return None
         if upgraded:
             conn.execute("UPDATE Users SET password_hash=? WHERE user_id=?", (upgraded, row[0]))
         conn.execute("UPDATE Users SET last_login=? WHERE user_id=?", (now.isoformat(), row[0]))
-        conn.execute("DELETE FROM Login_Attempts WHERE username=?", (username,))
+        conn.execute("DELETE FROM Login_Attempts WHERE username IN (?,?)", (account_key, username))
         # Bound table growth without storing passwords, tokens, IP addresses or user PII.
         conn.execute(
             "DELETE FROM Login_Attempts WHERE attempted_at<?",

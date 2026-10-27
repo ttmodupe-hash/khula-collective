@@ -70,17 +70,42 @@ def ensure_owner_setup_table(conn):
         activated_at TEXT NOT NULL,
         FOREIGN KEY(owner_user_id) REFERENCES Users(user_id)
     )""")
+    conn.execute("""CREATE TABLE IF NOT EXISTS Owner_Admin_Recovery_Uses (
+        challenge_sha256 TEXT PRIMARY KEY,
+        owner_user_id INTEGER NOT NULL,
+        recovered_at TEXT NOT NULL,
+        FOREIGN KEY(owner_user_id) REFERENCES Users(user_id)
+    )""")
 
 
 def activate_owner_admin(
         db_path, email, username, challenge, new_password, *,
         approved=False, env=None, now=None):
-    """Create one new admin after private challenge/verified-email proof.
+    """Create one new admin after private challenge/verified-email proof."""
+    return _complete_owner_access(
+        db_path, email, username, challenge, new_password,
+        approved=approved, env=env, now=now, recover_existing=False,
+    )["user_id"]
 
-    An existing user is *never* silently promoted, overwritten or deactivated.
-    Explicitly creates a separate administrator account instead. The token
-    and user write are atomic. No financial, club or member data is touched.
+
+def setup_or_recover_owner_admin(
+        db_path, email, username, challenge, new_password, *,
+        approved=False, env=None, now=None):
+    """A fresh owner challenge creates the first owner or resets that owner.
+
+    Existing accounts require an owner-activation receipt, matching verified
+    email and active admin status. Never claim a bootstrap account, promote a
+    member, reactivate a suspended user or choose among duplicate owners.
     """
+    return _complete_owner_access(
+        db_path, email, username, challenge, new_password,
+        approved=approved, env=env, now=now, recover_existing=True,
+    )
+
+
+def _complete_owner_access(
+        db_path, email, username, challenge, new_password, *,
+        approved, env, now, recover_existing):
     override_time = now
     now = now if now is not None else datetime.now(timezone.utc)
     settings = _settings(env=env, now=now)
@@ -99,8 +124,6 @@ def activate_owner_admin(
     if not hmac.compare_digest(digest, settings["digest"]):
         raise ValueError("Owner activation details are invalid or expired.")
     username = str(username).strip().lower()
-    if not USERNAME.fullmatch(username):
-        raise ValueError("Choose a username of 3–30 letters, numbers or underscores.")
     hashed_password = hash_password(new_password)
     with sqlite3.connect(db_path, timeout=15) as conn:
         conn.execute("BEGIN IMMEDIATE")
@@ -109,21 +132,57 @@ def activate_owner_admin(
             env=env,
             now=now if override_time is not None else datetime.now(timezone.utc),
         )
-        if not again or not hmac.compare_digest(
-                again["digest"], settings["digest"]):
+        if (not again or not hmac.compare_digest(again["digest"], settings["digest"])
+                or not hmac.compare_digest(again["email"], settings["email"])):
             raise ValueError("Owner activation is unavailable or has expired.")
         ensure_owner_setup_table(conn)
         if conn.execute(
-            "SELECT 1 FROM Owner_Admin_Activations WHERE challenge_sha256=?",
-            (digest,),
+            "SELECT 1 FROM Owner_Admin_Activations WHERE challenge_sha256=? "
+            "UNION ALL SELECT 1 FROM Owner_Admin_Recovery_Uses WHERE challenge_sha256=?",
+            (digest, digest),
         ).fetchone():
-            raise ValueError("This activation code has already been used.")
+            raise ValueError("This private code has already been used. Request a fresh owner code.")
+        owners = conn.execute(
+            "SELECT DISTINCT u.user_id,u.username,u.role,u.is_active "
+            "FROM Users u JOIN Owner_Admin_Activations a ON a.owner_user_id=u.user_id "
+            "WHERE LOWER(u.email)=? LIMIT 2", (settings["email"],),
+        ).fetchall()
+        timestamp = now.astimezone(timezone.utc).isoformat()
+        if owners:
+            if not recover_existing:
+                raise ValueError("An owner account already exists. Use the owner recovery form.")
+            if len(owners) != 1 or owners[0][2:] != ("admin", 1):
+                raise ValueError("Owner recovery requires a verified active owner account. Contact the project operator.")
+            owner_id, owner_username, _, _ = owners[0]
+            conn.execute(
+                "UPDATE Users SET password_hash=?,auth_epoch=auth_epoch+1,must_change_password=0 "
+                "WHERE user_id=? AND role='admin' AND is_active=1",
+                (hashed_password, owner_id),
+            )
+            from khula_security import _init_login_tracking
+            _init_login_tracking(conn)
+            conn.execute(
+                "DELETE FROM Login_Attempts WHERE username IN (?,?)",
+                (owner_username.lower(), settings["email"]),
+            )
+            conn.execute(
+                "INSERT INTO Owner_Admin_Recovery_Uses "
+                "(challenge_sha256,owner_user_id,recovered_at) VALUES (?,?,?)",
+                (digest, owner_id, timestamp),
+            )
+            conn.execute(
+                "INSERT INTO Admin_Actions(admin_user_id,action_type,details) VALUES (?,?,?)",
+                (owner_id, "owner_admin_password_recovered",
+                 "Fresh verified owner challenge; password reset and prior sessions revoked."),
+            )
+            return {"user_id": owner_id, "username": owner_username, "action": "recovered"}
+        if not USERNAME.fullmatch(username):
+            raise ValueError("Choose a username of 3–30 letters, numbers or underscores, starting with a letter.")
         if conn.execute(
             "SELECT 1 FROM Users WHERE LOWER(username)=?",
             (username,),
         ).fetchone():
-            raise ValueError("That administrator username is already in use.")
-        timestamp = now.astimezone(timezone.utc).isoformat()
+            raise ValueError("That username belongs to another account. Choose a different unused username for first-time owner setup.")
         try:
             cur = conn.execute(
                 "INSERT INTO Users "
@@ -147,7 +206,7 @@ def activate_owner_admin(
             (new_user_id, "owner_admin_activated",
              "Verified Railway-owner email challenge; new owner account created."),
         )
-    return new_user_id
+    return {"user_id": new_user_id, "username": username, "action": "activated"}
 
 
 def render_owner_setup():
@@ -156,15 +215,15 @@ def render_owner_setup():
     if st.query_params.get("owner_setup") != "1":
         return
     with st.container(border=True):
-        st.subheader("🔐 Khula owner administrator activation")
+        st.subheader("🔐 Set up or recover your Khula owner login")
         st.caption(
-            "Only the verified Railway account owner may activate an administrator. "
-            "Open this page using your official private activation email. "
-            "The code is not in the URL and expires automatically."
+            "Use a fresh code from your private owner email to set a new password. "
+            "If you already activated an owner account, this resets that same account "
+            "and shows your username. Old sessions will be signed out."
         )
         if not owner_setup_available():
             st.warning(
-                "Owner activation is unavailable or expired. "
+                "The private owner code is unavailable or expired. "
                 "Use your existing administrator login or request "
                 "a new activation through the verified Railway project."
             )
@@ -178,11 +237,12 @@ def render_owner_setup():
                 key="owner_private_activation_code",
             )
             username = st.text_input(
-                "Choose administrator username", value="khula_owner",
+                "Username for first-time setup only", value="khula_owner",
+                help="An existing verified owner keeps its username. If this name belongs to another account, choose a new unused name.",
                 key="owner_admin_username"
             )
             password = st.text_input(
-                "Choose a new strong administrator password",
+                "New administrator password (12–72 UTF-8 bytes)",
                 type="password", key="owner_admin_password"
             )
             confirmation = st.text_input(
@@ -193,11 +253,12 @@ def render_owner_setup():
                 "I control the verified Railway project-owner email, "
                 "consent to my administrator account and password hash being "
                 "stored in Khula's disclosed Railway hosting region, and "
-                "understand this account can review private membership requests.",
+                "authorise first-time setup or a password reset of my previously "
+                "activated owner account, and understand it can review private membership requests.",
                 key="owner_admin_confirm",
             )
             submit = st.form_submit_button(
-                "Activate my administrator account", type="primary",
+                "Save my new owner password", type="primary",
                 use_container_width=True,
             )
         if submit:
@@ -205,7 +266,7 @@ def render_owner_setup():
                 st.error("The administrator passwords do not match.")
             else:
                 try:
-                    activate_owner_admin(
+                    result = setup_or_recover_owner_admin(
                         DB_PATH, owner_email, username, activation_code,
                         password, approved=approval,
                     )
@@ -216,6 +277,6 @@ def render_owner_setup():
                     # privileged recovery (including form-widget secrets).
                     # The next run displays only a non-secret success notice.
                     st.session_state.clear()
-                    st.session_state["_khula_owner_setup_complete"] = True
+                    st.session_state["_khula_owner_setup_complete"] = result["username"]
                     st.query_params.clear()
                     st.rerun()

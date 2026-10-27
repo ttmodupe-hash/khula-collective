@@ -2,6 +2,7 @@ from khula_recovery import render_member_recovery
 from html import escape
 from khula_member_services import submit_payment_claim, latest_club_balance
 from khula_security import register_member, registration_enabled, member_auth_state
+from khula_applications import request_membership, public_registration_enabled
 from khula_compliance import render_public_notice, onboarding_gate_status
 from khula_advisory_core import bank_snapshot_fresh
 from khula_config import *
@@ -76,48 +77,111 @@ def render_login():
                 time.sleep(1)
                 st.rerun()
             else:
-                st.error("Invalid username or password")
+                st.error("Sign-in failed. Check your credentials, or ask the administrator whether your membership is approved.")
 
+    st.divider()
+    st.subheader("New to Khula? Apply for membership")
+    st.caption(
+        "Anyone may request an account when enrolment is open. "
+        "Only the club's administrator can approve access to member records "
+        "and financial features. Signing up does not automatically make you a member."
+    )
     render_public_notice()
-    if not registration_enabled():
-        st.warning(
-            "New real-member registrations are temporarily unavailable until "
-            "Khula's approved governance, privacy and hosting safeguards are recorded. "
-            "Existing active members can still sign in."
-        )
 
-    if registration_enabled():
-        with st.expander("New member? Register with your invitation"):
+    if not public_registration_enabled():
+        if registration_enabled():
+            st.warning(
+                "Public applications are temporarily paused by the club administrator. "
+                "Existing approved members can still sign in."
+            )
+        else:
+            st.warning(
+                "New requests are temporarily closed until Khula's privacy notice, "
+                "club governance and overseas-hosting safeguards have been formally "
+                "reviewed. No personal registration data is collected while closed."
+            )
+    else:
+        with st.expander("Apply for access — invitation code optional", expanded=True):
             with st.form("member_registration"):
-                new_user = st.text_input("Choose username")
-                new_name = st.text_input("Full legal name")
-                new_email = st.text_input("Email")
-                new_password = st.text_input("Create a strong password (12+ characters)", type="password")
-                confirm_password = st.text_input("Confirm password", type="password")
-                invite = st.text_input("Invitation code", type="password")
-                acknowledged = st.checkbox(
-                    "I have read Khula's privacy notice and understand the purpose of member records, "
-                    "overseas hosting and administrator approval."
+                new_user = st.text_input(
+                    "Choose username", key="join_username",
+                    help="Letters, digits and underscore; first character a letter."
                 )
-                if st.form_submit_button("Create member account"):
-                    if not acknowledged:
-                        st.error("Please read and acknowledge the privacy notice before registering.")
+                new_name = st.text_input(
+                    "Full name", key="join_name"
+                )
+                new_email = st.text_input(
+                    "Your email address", key="join_email",
+                    help="The administrator must verify that you control this email address before approval."
+                )
+                new_password = st.text_input(
+                    "Create password (12–72 UTF-8 bytes)",
+                    type="password", key="join_password"
+                )
+                confirm_password = st.text_input(
+                    "Confirm password", type="password", key="join_password_confirmation"
+                )
+                invite = st.text_input(
+                    "Invitation code (leave blank to request membership)",
+                    type="password", key="join_invitation"
+                )
+                adult = st.checkbox(
+                    "I confirm I am at least 18 years old and am applying for myself.",
+                    key="join_adult"
+                )
+                acknowledged = st.checkbox(
+                    "I have read the Khula privacy notice and understand the "
+                    "purpose of my registration details and administrator review.",
+                    key="join_privacy"
+                )
+                transferred = st.checkbox(
+                    "I acknowledge and expressly consent to the transfer "
+                    "of my registration details to the overseas Railway hosting region "
+                    "identified in the privacy notice.",
+                    key="join_overseas"
+                )
+                st.caption(
+                    "Applications are private. No contribution is due for registration; "
+                    "do not send bank account details, identity images, PINs or OTPs."
+                )
+                submitted = st.form_submit_button("Submit membership request")
+                if submitted:
+                    if not (adult and acknowledged and transferred):
+                        st.error(
+                            "Please read the privacy information and confirm all "
+                            "three eligibility and consent statements."
+                        )
                     elif new_password != confirm_password:
                         st.error("Passwords do not match.")
                     else:
                         try:
-                            register_member(
-                                DB_PATH, new_user, new_name, new_email,
-                                new_password, invite, notice_acknowledged=acknowledged
+                            if invite.strip():
+                                register_member(
+                                    DB_PATH, new_user, new_name, new_email,
+                                    new_password, invite,
+                                    notice_acknowledged=acknowledged
+                                )
+                            else:
+                                request_membership(
+                                    DB_PATH, new_user, new_name, new_email,
+                                    new_password,
+                                    notice_acknowledged=acknowledged,
+                                    international_transfer_acknowledged=transferred,
+                                    adult_confirmed=adult,
+                                )
+                            st.success(
+                                "Your membership request was recorded. "
+                                "You do NOT have access yet. The club administrator "
+                                "must independently verify and approve your application. "
+                                "No automatic email has been sent."
                             )
-                            st.success("Registration recorded. A club administrator must approve your account before login.")
-                        except ValueError as exc:
+                        except (ValueError, PermissionError) as exc:
                             st.error(str(exc))
 
     st.markdown("""
         </div>
         <div class='demo-box'>
-            New membership requires a unique invitation and administrator approval.
+            Anyone may apply when enrolment is open. Only approved accounts can sign in.
         </div>
         <div class='powered-by'>Collective savings &middot; Member governance &middot; Source-labelled research</div>
     </div>

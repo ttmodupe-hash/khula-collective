@@ -4,6 +4,7 @@ from khula_member_services import submit_payment_claim, latest_club_balance
 from khula_security import register_member, registration_enabled, member_auth_state
 from khula_applications import request_membership, public_registration_enabled
 from khula_membership_receipts import render_receipt_lookup
+from khula_owner_access import render_owner_setup
 from khula_compliance import render_public_notice, onboarding_gate_status
 from khula_advisory_core import bank_snapshot_fresh
 from khula_config import *

@@ -29,7 +29,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
       - name: Validate Python syntax
-        run: python -m compileall -q app.py khula_config.py khula_utils.py khula_pages1.py khula_pages2.py khula_pages3.py khula_advisory_core.py khula_market_data.py khula_sarb.py khula_public_markets.py khula_governance.py khula_member_services.py khula_intelligence.py khula_security.py khula_invitations.py khula_bank_import.py khula_account.py khula_recovery.py khula_compliance.py khula_bank_access.py khula_ai_engine.py khula_id_engine.py scripts tests
+        run: python -m compileall -q app.py khula_config.py khula_utils.py khula_pages1.py khula_pages2.py khula_pages3.py khula_advisory_core.py khula_market_data.py khula_sarb.py khula_public_markets.py khula_governance.py khula_member_services.py khula_reporting.py khula_intelligence.py khula_security.py khula_invitations.py khula_bank_import.py khula_account.py khula_recovery.py khula_compliance.py khula_bank_access.py khula_applications.py khula_compass.py khula_ai_engine.py khula_id_engine.py scripts tests
       - name: Check Unix entrypoint syntax
         run: sh -n khula_entrypoint.sh
       - name: Run unit and financial-control tests

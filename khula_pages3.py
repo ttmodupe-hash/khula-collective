@@ -5,6 +5,7 @@ from khula_config import *
 from khula_utils import *
 import json
 from html import escape
+from khula_reporting import read_reports, read_member_directory
 
 # ============================================================
 # PAGE 3: Member Voice, Constitution, Directory, Reports, Admin
@@ -127,78 +128,129 @@ def render_constitution():
 
 def render_directory():
     track_feature_usage(st.session_state.user_id, "directory")
-    st.markdown("<div class='main-header'><h1>👥 Member Directory</h1><p>Contact information and FICA status</p></div>", unsafe_allow_html=True)
+    st.title("👥 Member Directory")
+    st.caption("Only administrators can access the full member directory. Members see only their own recorded details.")
+    try:
+        members = read_member_directory(DB_PATH, st.session_state.user_id)
+    except PermissionError:
+        st.error("Your account no longer has access to this information.")
+        return
 
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("SELECT user_id, full_name, email, phone, role, fica_verified, join_date, is_active FROM Users ORDER BY join_date DESC")
-    members = c.fetchall()
-    conn.close()
-
-    for m in members:
-        uid, name, email, phone, role, fica, joined, active = m
-        # Contact details are personal information: members only see names.
-        if st.session_state.get("role") != "admin":
-            email = None
-            phone = None
+    if not members:
+        st.info("No approved member records are available.")
+        return
+    for uid, name, email, phone, role, fica, joined, active in members:
         name = escape(str(name or "Member"))
-        email = escape(str(email)) if email else None
-        phone = escape(str(phone)) if phone else None
-        fica_badge = "✅ FICA Verified" if fica else "⚠️ FICA Pending"
-        status_color = "#2ed573" if active else "#ff4757"
-        with st.container():
-            st.markdown(f"""
-            <div class='arrears-card' style='border-left:4px solid {status_color};'>
-                <h4>{name} <span style='font-size:0.75rem;color:#a0a0b0;'>[{role.upper()}]</span></h4>
-                <p style='font-size:0.85rem;margin:0;'>📧 {email or 'N/A'} | 📱 {phone or 'N/A'}</p>
-                <p style='font-size:0.8rem;margin-top:0.5rem;'><span class='payment-status {"status-paid" if fica else "status-partial"}'>{fica_badge}</span></p>
-                <p style='font-size:0.75rem;color:#6c757d;'>Joined: {joined[:10] if joined else 'N/A'}</p>
-            </div>
-            """, unsafe_allow_html=True)
+        role = escape(str(role or "member"))
+        email = escape(str(email or "")) or "Not provided"
+        phone = escape(str(phone or "")) or "Not provided"
+        status = "Active" if active else "Pending administrator approval"
+        verification = (
+            "Verification flag recorded; independent FICA evidence must be reviewed"
+            if fica else "Identity/FICA review pending"
+        )
+        st.markdown(
+            f"<div class='arrears-card'><h4>{name}</h4>"
+            f"<p>Role: {role} · {status}</p>"
+            f"<p>Email: {email} · Phone: {phone}</p>"
+            f"<p>{verification}</p>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+
 
 def render_reports():
     track_feature_usage(st.session_state.user_id, "reports")
-    st.markdown("<div class='main-header'><h1>📈 Reports</h1><p>Detailed analytics and data exports</p></div>", unsafe_allow_html=True)
-
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-
-    # Portfolio summary
-    c.execute("SELECT name, type, amount_invested, current_value, returns, status FROM Investments")
-    investments = c.fetchall()
-
-    if investments:
-        df = pd.DataFrame(investments, columns=["Name", "Type", "Invested", "Current Value", "Returns", "Status"])
-        st.subheader("Portfolio Performance")
-        st.dataframe(df, use_container_width=True)
-
-        fig = px.pie(df, values="Current Value", names="Type", title="Portfolio Allocation by Type", hole=0.4)
-        st.plotly_chart(fig, use_container_width=True)
-
-    # Member contribution summary
-    c.execute("SELECT u.full_name, SUM(mc.amount) as total FROM Monthly_Contributions mc JOIN Users u ON mc.user_id = u.user_id WHERE mc.status='paid' GROUP BY mc.user_id")
-    contrib = c.fetchall()
-    if contrib:
-        df_c = pd.DataFrame(contrib, columns=["Member", "Total Contributions"])
-        fig2 = px.bar(df_c, x="Member", y="Total Contributions", title="Total Contributions by Member")
-        st.plotly_chart(fig2, use_container_width=True)
-
-    # Sensitive exports are available to administrators only.
-    if st.session_state.get("role") != "admin":
-        st.caption("Member-level CSV exports are restricted to administrators.")
-        conn.close()
+    st.title("📈 Khula Collective Reports")
+    st.caption("Recorded club holdings, contribution history and approved member-level views.")
+    try:
+        snapshot = read_reports(DB_PATH, st.session_state.user_id)
+    except PermissionError:
+        st.error("Your account no longer has access to financial reports.")
         return
 
-    # Download data
-    st.subheader("Export Data")
-    c.execute("SELECT * FROM Monthly_Contributions")
-    all_contrib = c.fetchall()
-    if all_contrib:
-        df_all = pd.DataFrame(all_contrib, columns=["ID", "User ID", "Year", "Month", "Amount", "Status", "Date", "Method", "Reference"])
-        csv = df_all.to_csv(index=False).encode('utf-8')
-        st.download_button("📥 Download Contributions CSV", data=csv, file_name="contributions.csv", mime="text/csv")
+    st.info(
+        "Investment valuations are administrator-entered records, not independently "
+        "verified custodian statements or a live brokerage portfolio."
+    )
+    st.metric(
+        "Recorded club paid contributions (all periods)",
+        f"R{snapshot['club_recorded_paid_zar']:,.2f}",
+    )
+    if not snapshot["is_admin"]:
+        st.metric(
+            "Your own recorded paid contributions",
+            f"R{snapshot['viewer_recorded_paid_zar']:,.2f}",
+        )
+        if snapshot["viewer_history"]:
+            st.subheader("Your payment history")
+            st.dataframe(
+                [
+                    {"Year": year, "Month": month, "Recorded paid (ZAR)": float(amount)}
+                    for year, month, amount in snapshot["viewer_history"]
+                ],
+                use_container_width=True,
+                hide_index=True,
+            )
+        st.caption(
+            "The contributions of other members are private unless those members "
+            "explicitly opt in to a separate club recognition feature."
+        )
 
-    conn.close()
+    investments = snapshot["investment_rows"]
+    if investments:
+        df = pd.DataFrame(
+            investments,
+            columns=["Name", "Type", "Invested", "Current Value",
+                     "Returns", "Status"],
+        )
+        st.subheader("Club investment records")
+        st.dataframe(df, use_container_width=True)
+        positive = df[df["Current Value"] > 0]
+        if not positive.empty:
+            fig = px.pie(
+                positive,
+                values="Current Value",
+                names="Type",
+                title="Administrator-recorded investment mix",
+                hole=0.4,
+            )
+            st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("No custodian-supported investments have been recorded.")
+
+    if snapshot["is_admin"]:
+        st.subheader("Confidential contribution breakdown — administrators only")
+        if snapshot["member_totals"]:
+            frame = pd.DataFrame(
+                snapshot["member_totals"],
+                columns=["Member", "Recorded paid total (ZAR)"],
+            )
+            st.dataframe(frame, use_container_width=True)
+            chart = px.bar(
+                frame,
+                x="Member",
+                y="Recorded paid total (ZAR)",
+                title="Private member contributions",
+            )
+            st.plotly_chart(chart, use_container_width=True)
+        else:
+            st.caption("No contribution records to report.")
+
+        if snapshot["admin_csv"]:
+            st.subheader("Private administrative export")
+            header = [
+                "ID", "User ID", "Year", "Month", "Amount", "Status",
+                "Payment date", "Payment method", "Payment reference",
+            ]
+            df_all = pd.DataFrame(snapshot["admin_csv"], columns=header)
+            st.download_button(
+                "Download administrator contribution CSV",
+                data=df_all.to_csv(index=False).encode("utf-8"),
+                file_name="khula_admin_contributions.csv",
+                mime="text/csv",
+            )
+
 
 def render_admin():
     if st.session_state.role != "admin":
@@ -213,30 +265,46 @@ def render_admin():
         st.subheader("Member Management")
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
+        from khula_applications import ensure_applications_schema
+        ensure_applications_schema(conn)
         c.execute("SELECT user_id, username, full_name, email, role, is_active, monthly_contribution, fica_verified FROM Users")
         users = c.fetchall()
+        applications = {
+            member_id: status for member_id, status in c.execute(
+                "SELECT user_id,status FROM Membership_Applications"
+            ).fetchall()
+        }
         conn.close()
 
         for u in users:
             uid, uname, name, email, role, active, contrib, fica = u
             st.write(f"**{name}** (@{uname}) — {email or 'No email'}")
-            col1, col2, col3 = st.columns([2, 2, 1])
+            st.caption(f"Role: {role}. Administrator privileges cannot be granted through this page.")
+            if applications.get(uid) == "pending":
+                st.warning(
+                    "Registration request awaiting review. Use the Membership Approvals menu "
+                    "to independently verify and authorise access."
+                )
+                st.divider()
+                continue
+            if applications.get(uid) == "rejected":
+                st.caption(
+                    "Registration was rejected; this page cannot override the admission decision."
+                )
+                st.divider()
+                continue
+            col1, col2 = st.columns([2, 1])
             with col1:
-                next_role = st.selectbox(
-                    "Role", ["member", "admin"],
-                    index=0 if role == "member" else 1, key=f"role_{uid}"
+                next_active = st.checkbox(
+                    "Active account access", value=bool(active), key=f"active_{uid}"
                 )
             with col2:
-                next_active = st.checkbox(
-                    "Active (approval)", value=bool(active), key=f"active_{uid}"
-                )
-            with col3:
-                if st.button("Save", key=f"save_access_{uid}"):
+                if st.button("Save access", key=f"save_access_{uid}"):
                     try:
                         update_member_access(
-                            st.session_state.user_id, uid, next_role, bool(next_active)
+                            st.session_state.user_id, uid, role, bool(next_active)
                         )
-                        st.success("Member access saved in the audit log.")
+                        st.success("Access change saved and current sessions invalidated.")
                         st.rerun()
                     except (ValueError, PermissionError) as exc:
                         st.error(str(exc))
@@ -297,9 +365,13 @@ def render_profile():
     full_name, email, phone, contrib, theme, risk, notif = user
 
     with st.form("profile_form"):
-        new_name = st.text_input("Full Name", value=full_name or "")
-        new_email = st.text_input("Email", value=email or "")
-        new_phone = st.text_input("Phone", value=phone or "")
+        st.text_input("Verified full name", value=full_name or "", disabled=True)
+        st.text_input("Membership contact email", value=email or "", disabled=True)
+        st.caption(
+            "Your approved identity/contact cannot be changed by a profile edit. "
+            "Ask the club administrator for a verified correction using the official privacy contact."
+        )
+        new_phone = st.text_input("Preferred phone number (optional)", value=phone or "")
         st.caption(f"Club-assigned monthly target: R{float(contrib or 0):,.2f}. Only an administrator can change this.")
         new_theme = st.selectbox("Theme", ["dark", "light"], index=0 if theme == "dark" else 1)
         new_risk = st.selectbox("Risk Profile", ["conservative", "moderate", "aggressive"], index=["conservative", "moderate", "aggressive"].index(risk or "moderate"))
@@ -308,9 +380,10 @@ def render_profile():
         if st.form_submit_button("💾 Save Changes", use_container_width=True):
             conn = sqlite3.connect(DB_PATH)
             c = conn.cursor()
-            c.execute("""UPDATE Users SET full_name=?, email=?, phone=?,
-                      theme_preference=?, risk_profile=?, notification_prefs=? WHERE user_id=?""",
-                      (new_name, new_email, new_phone, new_theme, new_risk, ",".join(new_notif), st.session_state.user_id))
+            c.execute("""UPDATE Users SET phone=?,
+                      theme_preference=?, risk_profile=?, notification_prefs=?
+                      WHERE user_id=? AND is_active=1""",
+                      (new_phone[:30], new_theme, new_risk, ",".join(new_notif), st.session_state.user_id))
             conn.commit()
             conn.close()
             st.session_state.theme = new_theme

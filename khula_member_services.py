@@ -244,6 +244,25 @@ def update_member_access(admin_id, target_id, role, active, db_path=DB_PATH):
         ).fetchone()
         if not current:
             raise ValueError("User not found.")
+        # A public application may never be admitted by toggling the generic
+        # active checkbox. Use the evidence-attested approval queue instead.
+        from khula_applications import ensure_applications_schema
+        ensure_applications_schema(conn)
+        if current[0] == "member" and current[1] == 0 and active:
+            pending_application = conn.execute(
+                "SELECT status FROM Membership_Applications WHERE user_id=?",
+                (target_id,),
+            ).fetchone()
+            if pending_application:
+                raise ValueError(
+                    "Review this member through Membership Approvals; "
+                    "the generic active toggle cannot bypass that workflow."
+                )
+        if role == "admin" and current[0] != "admin":
+            raise ValueError(
+                "Promoting members to administrator is disabled until "
+                "a separate privileged-access verification process is approved."
+            )
         if current[0] == "admin" and current[1] == 1 and (role != "admin" or not active):
             remaining = conn.execute(
                 "SELECT COUNT(*) FROM Users WHERE role='admin' AND is_active=1 AND user_id!=?",
@@ -252,7 +271,8 @@ def update_member_access(admin_id, target_id, role, active, db_path=DB_PATH):
             if remaining == 0:
                 raise ValueError("Cannot disable or demote the only active admin.")
         conn.execute(
-            "UPDATE Users SET role=?,is_active=? WHERE user_id=?",
+            "UPDATE Users SET role=?,is_active=?,auth_epoch=auth_epoch+1 "
+            "WHERE user_id=?",
             (role, 1 if active else 0, target_id),
         )
         _audit(conn, admin_id, "member_access_updated",

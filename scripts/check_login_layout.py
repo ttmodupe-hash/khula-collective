@@ -38,6 +38,13 @@ def check(url, screenshot_dir):
                     f"Raw None text rendered on {name} public login"
                 )
 
+                logo = page.locator(".khula-auth-hero img")
+                assert logo.count() == 1, f"Missing Khula app logo on {name}"
+                icon_ok = logo.evaluate(
+                    "(img) => img.complete && img.naturalWidth >= 192"
+                )
+                assert icon_ok, f"Khula home-screen icon did not load on {name}"
+
                 input_box = username.bounding_box()
                 assert input_box is not None, f"Missing username box for {name}"
                 center = input_box["x"] + input_box["width"] / 2

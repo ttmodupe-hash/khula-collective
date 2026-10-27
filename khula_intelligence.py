@@ -220,6 +220,9 @@ def render_investment_guide():
 
     _optional_llm_commentary(investable, risk, years, allocation)
     st.divider()
+    from khula_public_markets import render_current_market_rates
+    render_current_market_rates()
+    st.divider()
     st.subheader("Explore an actual market quote")
     ticker = _select_market_symbol("guide_quote")
     if st.button("Retrieve dated quote", key="guide_fetch_quote"):

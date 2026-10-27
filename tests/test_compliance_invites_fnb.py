@@ -58,6 +58,16 @@ class ComplianceInvitationTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 generate_invitation(self.db, 1, "expected@example.invalid")
 
+    def test_railway_production_environment_never_bypasses_gate(self):
+        with patch.dict(os.environ, {
+                "RAILWAY_ENVIRONMENT_NAME": "production",
+                "KHULA_PRODUCTION": "0", "KHULA_DEMO_MODE": "0",
+                "KHULA_PRIVACY_NOTICE_APPROVED": "0"
+            }, clear=True):
+            self.assertFalse(registration_enabled())
+            with self.assertRaises(ValueError):
+                generate_invitation(self.db, 1, "newmember@example.invalid")
+
     def test_one_time_invitation_requires_acknowledgement(self):
         with patch.dict(os.environ, FLAGS, clear=True):
             self.assertTrue(onboarding_gate_status()["ready"])

@@ -265,30 +265,46 @@ def render_admin():
         st.subheader("Member Management")
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
+        from khula_applications import ensure_applications_schema
+        ensure_applications_schema(conn)
         c.execute("SELECT user_id, username, full_name, email, role, is_active, monthly_contribution, fica_verified FROM Users")
         users = c.fetchall()
+        applications = {
+            member_id: status for member_id, status in c.execute(
+                "SELECT user_id,status FROM Membership_Applications"
+            ).fetchall()
+        }
         conn.close()
 
         for u in users:
             uid, uname, name, email, role, active, contrib, fica = u
             st.write(f"**{name}** (@{uname}) — {email or 'No email'}")
-            col1, col2, col3 = st.columns([2, 2, 1])
+            st.caption(f"Role: {role}. Administrator privileges cannot be granted through this page.")
+            if applications.get(uid) == "pending":
+                st.warning(
+                    "Registration request awaiting review. Use the Membership Approvals menu "
+                    "to independently verify and authorise access."
+                )
+                st.divider()
+                continue
+            if applications.get(uid) == "rejected":
+                st.caption(
+                    "Registration was rejected; this page cannot override the admission decision."
+                )
+                st.divider()
+                continue
+            col1, col2 = st.columns([2, 1])
             with col1:
-                next_role = st.selectbox(
-                    "Role", ["member", "admin"],
-                    index=0 if role == "member" else 1, key=f"role_{uid}"
+                next_active = st.checkbox(
+                    "Active account access", value=bool(active), key=f"active_{uid}"
                 )
             with col2:
-                next_active = st.checkbox(
-                    "Active (approval)", value=bool(active), key=f"active_{uid}"
-                )
-            with col3:
-                if st.button("Save", key=f"save_access_{uid}"):
+                if st.button("Save access", key=f"save_access_{uid}"):
                     try:
                         update_member_access(
-                            st.session_state.user_id, uid, next_role, bool(next_active)
+                            st.session_state.user_id, uid, role, bool(next_active)
                         )
-                        st.success("Member access saved in the audit log.")
+                        st.success("Access change saved and current sessions invalidated.")
                         st.rerun()
                     except (ValueError, PermissionError) as exc:
                         st.error(str(exc))

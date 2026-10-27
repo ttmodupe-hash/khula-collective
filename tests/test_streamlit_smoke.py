@@ -143,7 +143,7 @@ class StreamlitPilotSmokeTests(unittest.TestCase):
                     username.set_value("pilotmember")
                     password.set_value("UniquePilotMemberPass2026!")
                     candidates = list(at.button) + list(at.get("form_submit_button"))
-                    sign_in = next((w for w in candidates if "Sign In" in w.label), None)
+                    sign_in = next((w for w in candidates if "sign in" in w.label.lower()), None)
                     self.assertIsNotNone(
                         sign_in,
                         "No login submit button found. Visible controls: "

@@ -1,0 +1,45 @@
+name: Khula external deployment health
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/khula-live-pilot-hardening-20261027
+    paths:
+      - .github/workflows/khula-external-health.yml
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify external Streamlit endpoint over HTTPS
+        shell: bash
+        run: |
+          set -euo pipefail
+          site="https://khula-collective-production.up.railway.app"
+          echo "Checking public domain: ${site}"
+          for i in 1 2 3 4; do
+            if curl --fail-with-body --silent --show-error --location --connect-timeout 8 --max-time 18 \
+              "${site}/_stcore/health" -o /tmp/khula-health; then
+              echo "Health payload:"
+              head -c 100 /tmp/khula-health
+              echo
+              if grep -Eiq 'ok|healthy' /tmp/khula-health; then break; fi
+            fi
+            if [ "${i}" = "4" ]; then
+              echo "Public Streamlit health endpoint is not verified"
+              exit 1
+            fi
+            sleep 5
+          done
+          curl --fail-with-body --silent --show-error --location --connect-timeout 8 --max-time 20 \
+            "${site}/" -o /tmp/khula-index.html
+          if ! grep -Eiq 'streamlit|Khula Collective' /tmp/khula-index.html; then
+            echo "Public response does not appear to be the Khula/Streamlit app"
+            exit 1
+          fi
+          echo "External health and HTML shell verified. Interactive onboarding requires separate testing."

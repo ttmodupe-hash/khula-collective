@@ -166,6 +166,12 @@ class KhulaMobilePwaTests(unittest.TestCase):
     def test_static_serving_enabled_and_installer_accessible_from_login(self):
         config = (ROOT / ".streamlit" / "config.toml").read_text(encoding="utf-8")
         self.assertIn("enableStaticServing = true", config)
+        self.assertIn("enableCORS = true", config)
+        self.assertIn("enableXsrfProtection = true", config)
+        self.assertNotIn("enableXsrfProtection = false", config)
+        entrypoint = (ROOT / "khula_entrypoint.sh").read_text(encoding="utf-8")
+        self.assertIn("--server.enableCORS=true", entrypoint)
+        self.assertIn("--server.enableXsrfProtection=true", entrypoint)
         login = (ROOT / "khula_pages1.py").read_text(encoding="utf-8")
         app = (ROOT / "app.py").read_text(encoding="utf-8")
         self.assertIn("/app/static/install.html", login)

@@ -72,6 +72,13 @@ def render_login():
         </div>
         """, unsafe_allow_html=True)
 
+        if st.session_state.pop("_khula_owner_setup_complete", False):
+            st.success(
+                "Your Khula administrator account has been activated. "
+                "Sign in below using your chosen username and password. "
+                "You can then approve requests under Membership Approvals."
+            )
+
         with st.container(border=True):
             st.subheader("Welcome back")
             st.caption("Use your approved Khula member account.")

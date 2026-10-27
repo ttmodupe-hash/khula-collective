@@ -32,6 +32,7 @@ env/
 *.db
 *.sqlite
 *.sqlite3
+*.khula-backup/
 
 # IDE
 .vscode/

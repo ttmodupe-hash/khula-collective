@@ -12,6 +12,7 @@ from datetime import datetime, timezone, timedelta
 
 from khula_compliance import onboarding_gate_status, record_notice_acknowledgement, running_live
 from khula_invitations import email_normalised
+from khula_membership_receipts import issue_status_receipt
 
 USERNAME_RE = re.compile(r"^[a-z][a-z0-9_]{2,29}$")
 MAX_HOURLY_APPLICATIONS = 30
@@ -57,7 +58,7 @@ def _application_count(conn, since):
 def request_membership(
         db_path, username, full_name, email, password, *,
         notice_acknowledged, international_transfer_acknowledged,
-        adult_confirmed):
+        adult_confirmed, include_receipt=False):
     """Request a real account without needing an administrator invitation.
 
     A successful request cannot authenticate and has role=member,is_active=0.
@@ -121,6 +122,9 @@ def request_membership(
             "VALUES (?,'public','pending',?,?,?)",
             (user_id, now.isoformat(), now.isoformat(), notice),
         )
+        if include_receipt is True:
+            code = issue_status_receipt(conn, cursor.lastrowid)
+            return {"application_id": cursor.lastrowid, "tracking_code": code}
         return cursor.lastrowid
 
 

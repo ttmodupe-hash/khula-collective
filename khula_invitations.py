@@ -168,7 +168,7 @@ def render_invitation_admin():
         return
     st.title("✉️ Invite genuine Khula members")
     status = onboarding_gate_status()
-    if os.environ.get("KHULA_PRODUCTION") == "1" and not status["ready"]:
+    if running_live() and not status["ready"]:
         st.error("Real-member invitations are paused while privacy and governance prerequisites are outstanding.")
         for blocker in status["missing"]:
             st.write("• " + blocker)

@@ -12,6 +12,7 @@ from datetime import date, datetime, timezone
 from urllib.parse import urlparse
 
 from khula_advisory_core import zar, available_savings
+from khula_compliance import ratified_constitution
 from khula_bank_import import (import_club_statement, unallocated_bank_credits,
                                attach_credit_to_claim, BankImportError)
 from khula_config import DB_PATH
@@ -169,11 +170,24 @@ def latest_club_balance(db_path=DB_PATH):
     }
 
 
+def current_constitution():
+    """Use a verified ratified version when supplied, otherwise a labelled draft."""
+    approved = ratified_constitution()
+    if approved:
+        return {**approved, "approved": True}
+    return {
+        "version": CONSTITUTION_VERSION,
+        "text": CONSTITUTION_TEXT,
+        "sha256": hashlib.sha256(CONSTITUTION_TEXT.encode("utf-8")).hexdigest(),
+        "approved": False,
+    }
+
+
 def acknowledgement_status(user_id, db_path=DB_PATH):
     with sqlite3.connect(db_path) as conn:
         row = conn.execute(
             "SELECT signed_at FROM Constitution_Signatures WHERE user_id=? AND constitution_version=?",
-            (user_id, CONSTITUTION_VERSION),
+            (user_id, current_constitution()["version"]),
         ).fetchone()
     return row[0] if row else None
 
@@ -186,11 +200,11 @@ def acknowledge_constitution(user_id, db_path=DB_PATH):
         ).fetchone()
         if not row:
             raise PermissionError("Active member required.")
+        document = current_constitution()
         conn.execute(
             "INSERT OR IGNORE INTO Constitution_Signatures "
             "(user_id,constitution_version,document_sha256,full_name_at_signature) VALUES (?,?,?,?)",
-            (user_id, CONSTITUTION_VERSION,
-             hashlib.sha256(CONSTITUTION_TEXT.encode("utf-8")).hexdigest(), row[0]),
+            (user_id, document["version"], document["sha256"], row[0]),
         )
     return True
 
@@ -311,18 +325,33 @@ def render_leaderboard():
 def render_constitution_review():
     import streamlit as st
     user_id = st.session_state.user_id
+    document = current_constitution()
     st.title("📜 Khula Constitution & Member Governance")
-    st.info("Reintroduced from the original Khula app. This is a draft for member review, not an executed legal agreement.")
-    st.text_area("Version " + CONSTITUTION_VERSION, CONSTITUTION_TEXT, height=360, disabled=True)
-    st.download_button("Download draft text", CONSTITUTION_TEXT, file_name="khula_constitution_draft.txt", mime="text/plain")
+    if document["approved"]:
+        st.success("This is the document version recorded as ratified by the club operator. External legal approval is not certified by the app.")
+    else:
+        st.warning(
+            "This is the original draft, not the club's legally ratified constitution. "
+            "Do not use it as a final binding membership agreement."
+        )
+    st.text_area("Version " + document["version"], document["text"], height=360, disabled=True)
+    st.download_button(
+        "Download this document text",
+        document["text"],
+        file_name="khula_constitution_" + document["version"] + ".txt",
+        mime="text/plain",
+    )
     when = acknowledgement_status(user_id)
     if when:
-        st.success(f"You acknowledged receiving this version on {when}.")
+        st.success(f"You acknowledged receiving this document version on {when}.")
     else:
-        agreed = st.checkbox("I have read this draft and acknowledge receipt for review.")
-        if st.button("Record acknowledgement", disabled=not agreed):
+        acknowledgement = st.checkbox(
+            "I have read this specific version and acknowledge receipt; "
+            "final rights remain governed by the legally approved club rules."
+        )
+        if st.button("Record receipt", disabled=not acknowledgement):
             acknowledge_constitution(user_id)
-            st.success("Acknowledgement recorded.")
+            st.success("Receipt recorded with version and document SHA-256 hash.")
             st.rerun()
 
 

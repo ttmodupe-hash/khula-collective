@@ -17,6 +17,9 @@ from unittest.mock import patch
 from streamlit.testing.v1 import AppTest
 
 ROOT = Path(__file__).resolve().parents[1]
+# Python direct execution of scripts/... places scripts/ (not repository root)
+# on sys.path. Resolve imports explicitly; never import another installation.
+sys.path.insert(0, str(ROOT))
 SCRIPT = ROOT / "app.py"
 
 MEMBER_PAGES = (

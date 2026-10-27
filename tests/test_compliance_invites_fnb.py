@@ -1,5 +1,6 @@
 """Protect personal invitations, bank-access claims and POPIA acknowledgement."""
 import os
+import hashlib
 import sqlite3
 import tempfile
 import unittest
@@ -21,9 +22,23 @@ FLAGS = {
     "KHULA_RESPONSIBLE_PARTY_NAME": "Khula Collective Association",
     "KHULA_PRIVACY_CONTACT_EMAIL": "privacy@example.invalid",
     "KHULA_PRIVACY_NOTICE_VERSION": "v2026-10-approved",
+    "KHULA_CONSTITUTION_VERSION": "ratified-v2026-10",
     "KHULA_PRODUCTION": "1",
     "KHULA_DEMO_MODE": "0",
 }
+
+
+# Test-only approved-version fixture; not an actual Khula constitution.
+CONSTITUTION_FIXTURE = (
+    "KHULA TEST CONSTITUTION — non-production fixture. "
+    "Member governance, independent bank mandate, committee duties, "
+    "contribution policy, withdrawals, exit rules and reconciliation. "
+    * 8
+)
+FLAGS["KHULA_CONSTITUTION_DOCUMENT_TEXT"] = CONSTITUTION_FIXTURE
+FLAGS["KHULA_CONSTITUTION_SHA256"] = hashlib.sha256(
+    CONSTITUTION_FIXTURE.encode("utf-8")
+).hexdigest()
 
 
 class ComplianceInvitationTests(unittest.TestCase):

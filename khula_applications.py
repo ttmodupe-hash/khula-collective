@@ -139,11 +139,15 @@ def list_membership_requests(db_path, admin_id, *, status="pending"):
         if not active_admin:
             raise PermissionError("An active administrator must review members.")
         ensure_applications_schema(conn)
+        ordering = (
+            "a.submitted_at ASC" if status == "pending" else
+            "a.reviewed_at DESC"
+        )
         return conn.execute(
             "SELECT a.application_id,u.user_id,u.username,u.full_name,u.email,"
             "a.source,a.submitted_at,a.status "
             "FROM Membership_Applications a JOIN Users u ON u.user_id=a.user_id "
-            "WHERE a.status=? ORDER BY a.submitted_at ASC LIMIT 100",
+            "WHERE a.status=? ORDER BY " + ordering + " LIMIT 100",
             (status,),
         ).fetchall()
 
@@ -229,6 +233,42 @@ def review_membership_request(
         return {"application_id": application_id, "user_id": user_id, "status": decision}
 
 
+def membership_decision_email(name, recipient, status, *,
+                              base_url="https://khula-collective-production.up.railway.app"):
+    """Copyable human-reviewed notice; does not send emails or reveal secrets."""
+    from khula_invitations import email_normalised
+    addr = email_normalised(recipient)
+    person = str(name).strip()
+    if not 3 <= len(person) <= 120 or "\\r" in person or "\\n" in person:
+        raise ValueError("Invalid member name.")
+    if status == "approved":
+        subject = "Khula Collective — your membership application has been approved"
+        body = (
+            f"Hello {person},\\n\\n"
+            "A Khula Collective administrator has reviewed and approved your membership request.\\n"
+            f"You may now sign in with your own username and password at: {base_url}\\n\\n"
+            "Never share your password, bank PIN, OTP or a membership tracking code. "
+            "The club's published constitution governs member contributions "
+            "and decisions. Bank payments are not automatically collected through "
+            "your login.\\n\\n"
+            "If you did not request this account, contact the club using "
+            "an independently verified channel.\\n\\nKhula Collective Administration"
+        )
+    elif status == "rejected":
+        subject = "Khula Collective — membership application update"
+        body = (
+            f"Hello {person},\\n\\n"
+            "Your request to join Khula Collective was reviewed and not approved. "
+            "You will not be able to access the private member portal.\\n\\n"
+            "If you believe there is an error, contact the club administrator "
+            "through a verified channel. Do not email bank credentials, PINs or "
+            "identity scans.\\n\\nKhula Collective Administration"
+        )
+    else:
+        raise ValueError("Only completed membership decisions can be shared.")
+    return {"to": addr, "subject": subject, "body": body}
+
+
 def render_membership_approvals():
     import streamlit as st
     from khula_config import DB_PATH
@@ -248,6 +288,36 @@ def render_membership_approvals():
         )
     pending = list_membership_requests(DB_PATH, st.session_state.user_id)
     st.metric("Awaiting review", len(pending))
+    with st.expander("Recent decisions — private notification emails to copy"):
+        st.caption(
+            "Khula does not automatically send email. Verify the recipient and "
+            "send only through an approved private club address."
+        )
+        reviewed = (
+            list_membership_requests(DB_PATH, st.session_state.user_id, status="approved")[:5]
+            + list_membership_requests(DB_PATH, st.session_state.user_id, status="rejected")[:5]
+        )
+        if not reviewed:
+            st.caption("No reviewed membership applications yet.")
+        for item in reviewed:
+            aid, uid, username, name, email, source, submitted, decision = item
+            st.write(f"Request #{aid} — {name}: {decision}")
+            try:
+                mail = membership_decision_email(name, email, decision)
+                st.text_input(
+                    f"Recipient #{aid}", value=mail["to"],
+                    disabled=True, key=f"membership_mail_to_{aid}"
+                )
+                st.text_input(
+                    f"Subject #{aid}", value=mail["subject"],
+                    disabled=True, key=f"membership_mail_subject_{aid}"
+                )
+                st.text_area(
+                    f"Copy reviewed email #{aid}", value=mail["body"],
+                    height=180, key=f"membership_mail_body_{aid}"
+                )
+            except ValueError:
+                st.warning("This application has no valid email to notify.")
     if not pending:
         st.success("No pending public membership applications.")
         return

@@ -98,6 +98,7 @@ class ComplianceInvitationTests(unittest.TestCase):
                 self.db, "newmember", "New Member", "newmember@example.invalid",
                 "MemberStrongPassword2026!", token,
                 notice_acknowledged=True,
+                international_transfer_acknowledged=True, adult_confirmed=True,
             )
             with sqlite3.connect(self.db) as conn:
                 ack = conn.execute(
@@ -114,12 +115,23 @@ class ComplianceInvitationTests(unittest.TestCase):
             self.assertEqual(invitation[1], member)
             self.assertNotEqual(invitation[0], token)
             self.assertEqual(user[0], 0)
+            with sqlite3.connect(self.db) as conn:
+                queued = conn.execute(
+                    "SELECT source,status,cross_border_consent_at "
+                    "FROM Membership_Applications WHERE user_id=?", (member,)
+                ).fetchone()
+            self.assertEqual(queued[:2], ("invitation", "pending"))
+            self.assertTrue(queued[2])
+            from khula_member_services import update_member_access
+            with self.assertRaises(ValueError):
+                update_member_access(1, member, "member", True, self.db)
             self.assertIsNone(authenticate_user(self.db,"newmember","MemberStrongPassword2026!"))
             with self.assertRaises(ValueError):
                 register_member(
                     self.db, "newmember2", "Second Member", "newmember@example.invalid",
                     "AnotherMemberPassword2026!", token,
                     notice_acknowledged=True,
+                    international_transfer_acknowledged=True, adult_confirmed=True,
                 )
 
     def test_private_invitation_email_uses_actual_token_without_links_with_query_secrets(self):

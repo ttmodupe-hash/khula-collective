@@ -20,6 +20,7 @@ from khula_compliance import render_compliance_status
 from khula_bank_access import render_bank_access_admin
 from khula_applications import render_membership_approvals
 from khula_compass import render_compass
+from khula_launch_center import render_launch_center
 from khula_member_services import (
     render_admin_reconciliation,
     render_club_goals,
@@ -211,6 +212,7 @@ def main():
         if st.session_state.role == "admin":
             nav_items.append(("admin", "👑 Admin Panel"))
             nav_items.append(("membership_approvals", "✅ Membership Approvals"))
+            nav_items.append(("launch_center", "🚦 Launch Control"))
             nav_items.append(("reconciliation", "🧾 Reconciliation"))
             nav_items.append(("invites", "✉️ Member Invitations"))
             nav_items.append(("bank_access", "🏦 FNB Bank Access"))
@@ -304,6 +306,8 @@ def main():
         club_pages.render_admin()
     elif page == "membership_approvals":
         render_membership_approvals()
+    elif page == "launch_center":
+        render_launch_center()
     elif page == "reconciliation":
         render_admin_reconciliation()
     elif page == "invites":

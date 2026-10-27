@@ -13,7 +13,30 @@ from khula_applications import (
 )
 from khula_security import authenticate_user, hash_password, member_auth_state
 from khula_member_services import update_member_access
-from tests.test_compliance_invites_fnb import FLAGS
+import hashlib
+
+TEST_CONSTITUTION = (
+    "Non-production Khula governance example for testing account access; "
+    "memberships, savings, conflicts of interest, custody, exits and disputes. "
+    * 10
+)
+FLAGS = {
+    "KHULA_PRIVACY_NOTICE_APPROVED": "1",
+    "KHULA_INFORMATION_OFFICER_REGISTERED": "1",
+    "KHULA_CROSS_BORDER_REVIEW_APPROVED": "1",
+    "KHULA_OPERATOR_DPA_REVIEWED": "1",
+    "KHULA_CONSTITUTION_RATIFIED": "1",
+    "KHULA_RESPONSIBLE_PARTY_NAME": "Khula Test Collective",
+    "KHULA_PRIVACY_CONTACT_EMAIL": "privacy@example.invalid",
+    "KHULA_PRIVACY_NOTICE_VERSION": "approved-2026-10",
+    "KHULA_CONSTITUTION_VERSION": "approved-test-2026-10",
+    "KHULA_CONSTITUTION_DOCUMENT_TEXT": TEST_CONSTITUTION,
+    "KHULA_CONSTITUTION_SHA256": hashlib.sha256(
+        TEST_CONSTITUTION.encode("utf-8")
+    ).hexdigest(),
+    "KHULA_PRODUCTION": "1",
+    "KHULA_DEMO_MODE": "0",
+}
 
 
 class PublicMembershipApplicationTests(unittest.TestCase):

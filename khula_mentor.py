@@ -39,11 +39,14 @@ def _authorize(conn, user_id, auth_epoch):
 
 
 @contextmanager
-def _session(db_path, user_id, auth_epoch, write=False):
+def _session(db_path, user_id, auth_epoch):
     conn = sqlite3.connect(db_path, timeout=10, isolation_level=None)
     try:
         conn.execute("PRAGMA foreign_keys=ON")
-        conn.execute("BEGIN IMMEDIATE" if write else "BEGIN")
+        # Schema is lazy and additive, so even a first profile read can write.
+        # Acquire the reservation before SELECT to avoid read-to-write deadlocks
+        # when multiple members open the new feature simultaneously.
+        conn.execute("BEGIN IMMEDIATE")
         _authorize(conn, user_id, auth_epoch)
         # Additive schema only. Existing financial tables are never modified.
         conn.execute("""CREATE TABLE IF NOT EXISTS Mentor_Preferences (
@@ -88,7 +91,7 @@ def learning_state(db_path, user_id, auth_epoch):
 def set_progress_consent(db_path, user_id, auth_epoch, enabled):
     if type(enabled) is not bool:
         raise ValueError("Choose whether to save progress.")
-    with _session(db_path, user_id, auth_epoch, write=True) as conn:
+    with _session(db_path, user_id, auth_epoch) as conn:
         if enabled:
             conn.execute("INSERT OR IGNORE INTO Mentor_Preferences VALUES(?,?,?)",
                          (user_id, _now().isoformat(), CONTENT_VERSION))
@@ -107,7 +110,7 @@ def check_answer(lesson_id, choice):
 
 def record_answer(db_path, user_id, auth_epoch, lesson_id, choice):
     result = check_answer(lesson_id, choice)
-    with _session(db_path, user_id, auth_epoch, write=True) as conn:
+    with _session(db_path, user_id, auth_epoch) as conn:
         if not conn.execute("SELECT 1 FROM Mentor_Preferences WHERE user_id=?", (user_id,)).fetchone():
             raise PermissionError("Saving progress needs your opt-in.")
         conn.execute("""INSERT INTO Mentor_Progress VALUES(?,?,?,?,1,?)
@@ -221,7 +224,7 @@ def _safe_question(question):
 def _reserve_request(db_path, user_id, auth_epoch, now):
     day = now.date().isoformat()
     month_start = day[:7] + "-01"
-    with _session(db_path, user_id, auth_epoch, write=True) as conn:
+    with _session(db_path, user_id, auth_epoch) as conn:
         # Bound retention without allowing a member to erase today's counters.
         conn.execute("DELETE FROM Mentor_AI_Usage WHERE day<?", ((now - timedelta(days=62)).date().isoformat(),))
         own = conn.execute("SELECT requests,last_requested_at FROM Mentor_AI_Usage WHERE user_id=? AND day=?",

@@ -8,6 +8,7 @@ from pathlib import Path
 import sqlite3
 import tempfile
 from types import SimpleNamespace
+from threading import Barrier
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -88,6 +89,15 @@ class MentorTests(unittest.TestCase):
         with ThreadPoolExecutor(max_workers=4) as pool:
             list(pool.map(lambda _: mentor.record_answer(self.db, 1, 0, "cashflow", 1), range(8)))
         self.assertEqual(mentor.learning_state(self.db, 1, 0)["progress"]["cashflow"]["attempts"], 8)
+
+    def test_simultaneous_first_profile_reads_initialise_without_lock_errors(self):
+        barrier = Barrier(4)
+        def first_read(index):
+            barrier.wait()
+            return mentor.learning_state(self.db, index % 2 + 1, 0)
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            states = list(pool.map(first_read, range(4)))
+        self.assertEqual(states, [{"save_progress": False, "progress": {}}] * 4)
 
     def test_scenario_zero_return_matches_contributions_exactly(self):
         result = mentor.practice_projection(1000, 500, 10, 0, 0, 0)

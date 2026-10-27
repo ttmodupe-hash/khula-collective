@@ -4,6 +4,7 @@ from khula_member_services import submit_payment_claim, latest_club_balance
 from khula_security import register_member, registration_enabled, member_auth_state
 from khula_applications import request_membership, public_registration_enabled
 from khula_membership_receipts import render_receipt_lookup
+from khula_owner_access import render_owner_setup
 from khula_compliance import render_public_notice, onboarding_gate_status
 from khula_advisory_core import bank_snapshot_fresh
 from khula_config import *
@@ -71,6 +72,13 @@ def render_login():
         </div>
         """, unsafe_allow_html=True)
 
+        if st.session_state.pop("_khula_owner_setup_complete", False):
+            st.success(
+                "Your Khula administrator account has been activated. "
+                "Sign in below using your chosen username and password. "
+                "You can then approve requests under Membership Approvals."
+            )
+
         with st.container(border=True):
             st.subheader("Welcome back")
             st.caption("Use your approved Khula member account.")
@@ -107,6 +115,10 @@ def render_login():
                 type="secondary",
             )
             st.caption("Installing the app does not approve or create a member account.")
+
+        # The private owner setup link has no token in the URL. Only a fresh
+        # email-delivered code plus verified Railway owner email can grant admin.
+        render_owner_setup()
 
         with st.container(border=True):
             st.subheader("New to Khula? Apply for membership")

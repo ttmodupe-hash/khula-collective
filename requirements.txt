@@ -37,7 +37,7 @@ phonenumbers>=8.13.0     # South African phone number validation
 python-dateutil>=2.8.0
 
 # --- AI / ML ---
-openai>=1.0.0            # Optional: for advanced AI features
+openai>=1.68.2,<3.0.0    # Optional Responses API for the learning mentor
 # anthropic>=0.8.0
 
 # --- ID Verification / OCR ---

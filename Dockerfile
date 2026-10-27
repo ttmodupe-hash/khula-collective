@@ -47,6 +47,9 @@ COPY khula_membership_receipts.py .
 COPY khula_launch_center.py .
 COPY khula_owner_access.py .
 COPY khula_intelligence.py .
+COPY khula_mentor.py .
+COPY khula_mentor_content.py .
+COPY khula_mentor_ui.py .
 COPY khula_entrypoint.sh /usr/local/bin/khula-entrypoint
 COPY .streamlit/ .streamlit/
 

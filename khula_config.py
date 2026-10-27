@@ -40,6 +40,7 @@ INVESTMENT_TYPES = [
 MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
 
 APP_FEATURES = [
+    {"id": "mentor", "name": "Khula Mentor", "icon": "🌱", "description": "Your private financial learning journey, knowledge checks and investment practice lab", "category": "Learning", "new": True, "premium": False},
     {"id": "dashboard", "name": "Dashboard", "icon": "🏠", "description": "Overview of club wealth and portfolio", "category": "Core", "new": False, "premium": False},
     {"id": "payments", "name": "Payment Tracking", "icon": "💰", "description": "Track contributions and arrears", "category": "Core", "new": False, "premium": False},
     {"id": "fnb_sync", "name": "FNB Bank Sync", "icon": "🏦", "description": "FNB PDF/CSV statement upload; live API requires approval", "category": "Banking", "new": True, "premium": False},

@@ -12,6 +12,13 @@ from datetime import datetime, timezone
 
 EMAIL = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 
+def running_live(env=None):
+    """Treat Railway's production environment as real even without app flags."""
+    env = env if env is not None else os.environ
+    return (env.get("KHULA_PRODUCTION") == "1"
+            or env.get("RAILWAY_ENVIRONMENT_NAME", "").lower() == "production")
+
+
 APPROVAL_FLAGS = {
     "KHULA_PRIVACY_NOTICE_APPROVED": "Approved POPIA privacy notice",
     "KHULA_INFORMATION_OFFICER_REGISTERED": "Information Officer registered with the Information Regulator",

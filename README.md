@@ -105,6 +105,24 @@ penetration, operational and compliance acceptance testing.
 - The app does not initiate a bank transfer, send investment orders, or send
   automated WhatsApp reminders.
 
+## October 27, 2026: install Khula on a phone (PWA)
+
+Members can **install Khula from its HTTPS website** on supported Android
+and iPhone browsers, without an APK or an app-store listing. The public
+login page and authenticated member sidebar provide a **📲 Install Khula**
+link to an accessible installation guide.
+
+- [Install page](https://khula-collective-production.up.railway.app/app/static/install.html)
+- [Android and iPhone steps, security, acceptance](docs/MOBILE_INSTALL.md)
+- The installable manifest is served at `/app/static/khula-manifest.json`
+  with 192px/512px PNG icons, a standalone display and root start URL.
+- The app requires internet access. **No service worker or offline financial
+  data cache** is installed; access still requires an administrator-approved
+  member account. Real-member privacy approval requirements remain unchanged.
+- The root Streamlit HTML head is patched during Docker build from a pinned,
+  local source script. CI verifies the installed framework's HTML format
+  so upgrades do not silently break mobile installation.
+
 ## October 27, 2026: first-member pilot improvements
 
 **Register → track → verify → approve → sign in** is now a visible,

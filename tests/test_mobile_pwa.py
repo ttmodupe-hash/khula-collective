@@ -134,7 +134,7 @@ class KhulaMobilePwaTests(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             validate_hardened_installer(
-                hardened.replace("Install Khula on this device", "Install unsafe app")
+                hardened.replace("button.hidden = true;", "button.hidden = false;", 1)
             )
         with self.assertRaises(ValueError):
             validate_hardened_installer(

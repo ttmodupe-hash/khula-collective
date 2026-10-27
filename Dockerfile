@@ -33,6 +33,7 @@ COPY khula_market_data.py .
 COPY khula_member_services.py .
 COPY khula_governance.py .
 COPY khula_sarb.py .
+COPY khula_public_markets.py .
 COPY khula_invitations.py .
 COPY khula_bank_import.py .
 COPY khula_account.py .

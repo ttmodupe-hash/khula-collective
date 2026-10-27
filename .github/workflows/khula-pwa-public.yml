@@ -41,5 +41,4 @@ jobs:
         run: |
           pip install 'playwright>=1.56,<2.0'
           python -m playwright install chromium
-          python scripts/check_install_browser.py \\
-            --url https://khula-collective-production.up.railway.app
+          python scripts/check_install_browser.py --url https://khula-collective-production.up.railway.app

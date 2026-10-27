@@ -133,25 +133,27 @@ def redeem_member_recovery(db_path, username, email, token, new_password):
                     token_id = recovery_id
                     break
         if not accepted:
+            # Commit failed-attempt evidence even though the public request fails.
             conn.execute(
                 "INSERT INTO Recovery_Attempts(username,attempted_at) VALUES (?,?)",
                 (username, now.isoformat()),
             )
-            raise ValueError("Recovery information is invalid or expired.")
-
-        updated = conn.execute(
-            "UPDATE Member_Recovery_Tokens SET consumed_at=? "
-            "WHERE recovery_id=? AND consumed_at IS NULL",
-            (now.isoformat(), token_id),
-        )
-        if updated.rowcount != 1:
-            raise ValueError("Recovery information is invalid or expired.")
-        conn.execute(
-            "UPDATE Users SET password_hash=?, auth_epoch=auth_epoch+1,"
-            "must_change_password=0 WHERE user_id=? AND role='member' AND is_active=1",
-            (new_hash, row[0]),
-        )
-        conn.execute("DELETE FROM Recovery_Attempts WHERE username=?", (username,))
+        else:
+            updated = conn.execute(
+                "UPDATE Member_Recovery_Tokens SET consumed_at=? "
+                "WHERE recovery_id=? AND consumed_at IS NULL",
+                (now.isoformat(), token_id),
+            )
+            if updated.rowcount != 1:
+                raise ValueError("Recovery information is invalid or expired.")
+            conn.execute(
+                "UPDATE Users SET password_hash=?, auth_epoch=auth_epoch+1,"
+                "must_change_password=0 WHERE user_id=? AND role='member' AND is_active=1",
+                (new_hash, row[0]),
+            )
+            conn.execute("DELETE FROM Recovery_Attempts WHERE username=?", (username,))
+    if not accepted:
+        raise ValueError("Recovery information is invalid or expired.")
     return True
 
 
@@ -214,12 +216,12 @@ def render_recovery_admin():
     if st.button("Issue a one-time recovery code", disabled=not approved):
         try:
             token = issue_member_recovery(DB_PATH, st.session_state.user_id, labels[member_name])
-            st.session_state["member_recovery_new_token"] = token
+            st.session_state["member_recovery_new_token"] = {"token": token, "member_id": labels[member_name]}
         except (ValueError, PermissionError) as exc:
             st.error(str(exc))
     token = st.session_state.get("member_recovery_new_token")
-    if token:
-        st.code(token, language=None)
+    if token and token.get("member_id") == labels[member_name]:
+        st.code(token["token"], language=None)
         st.caption("Copy and deliver privately. This code is not stored in plaintext.")
         if st.button("Clear recovery code from this session"):
             st.session_state.pop("member_recovery_new_token", None)

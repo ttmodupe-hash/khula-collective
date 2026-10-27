@@ -1,7 +1,8 @@
 from khula_recovery import render_member_recovery
 from html import escape
-from khula_member_services import submit_payment_claim
+from khula_member_services import submit_payment_claim, latest_club_balance
 from khula_security import register_member, registration_enabled, member_auth_state
+from khula_advisory_core import bank_snapshot_fresh
 from khula_config import *
 from khula_utils import *
 import hashlib
@@ -137,17 +138,27 @@ def render_dashboard():
     c.execute("SELECT COALESCE(SUM(amount), 0) FROM Monthly_Contributions WHERE year=? AND month=? AND status='paid'", (current_year, current_month))
     month_contrib = c.fetchone()[0] or 0
 
-    c.execute("SELECT COUNT(DISTINCT user_id) FROM Users WHERE is_active=1")
+    c.execute("SELECT COUNT(DISTINCT user_id) FROM Users WHERE is_active=1 AND role='member'")
     active_members = c.fetchone()[0] or 0
 
     conn.close()
+
+    # Club bank balances are sourced separately from investment holdings
+    # and ledger entries. Never add them together as "available savings".
+    snapshot = latest_club_balance()
+    if snapshot and bank_snapshot_fresh(snapshot["as_of"]):
+        snapshot_balance_label = f"R{snapshot['available']:,.0f}"
+        bank_label = f"Manual bank snapshot: {snapshot['as_of']}"
+    else:
+        snapshot_balance_label = "Unverified"
+        bank_label = "No recent administrator-attested bank statement"
 
     # ── KPI Cards ───────────────────────────────────────────
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.markdown(f"""
         <div class='metric-card'>
-            <div class='metric-label'>Portfolio Value</div>
+            <div class='metric-label'>Recorded investment valuation</div>
             <div class='metric-value'>R{portfolio_value:,.0f}</div>
         </div>
         """, unsafe_allow_html=True)
@@ -156,35 +167,40 @@ def render_dashboard():
         delta_sign = "+" if total_returns >= 0 else ""
         st.markdown(f"""
         <div class='metric-card'>
-            <div class='metric-label'>Total Returns</div>
+            <div class='metric-label'>Recorded returns (not independently audited)</div>
             <div class='metric-value' style='color:{delta_color};'>{delta_sign}R{total_returns:,.0f}</div>
         </div>
         """, unsafe_allow_html=True)
     with col3:
         st.markdown(f"""
         <div class='metric-card'>
-            <div class='metric-label'>This Month</div>
+            <div class='metric-label'>Contributions marked paid this month</div>
             <div class='metric-value'>R{month_contrib:,.0f}</div>
         </div>
         """, unsafe_allow_html=True)
     with col4:
         st.markdown(f"""
         <div class='metric-card'>
-            <div class='metric-label'>Members</div>
+            <div class='metric-label'>Active club members (excluding admins)</div>
             <div class='metric-value'>{active_members}</div>
         </div>
         """, unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # ── News Ticker ─────────────────────────────────────────
-    news = random.choice(SA_NEWS_HEADLINES)
-    st.markdown(f"""
-    <div style='background:#1e1e30;padding:0.75rem 1rem;border-radius:12px;border-left:4px solid #00b894;margin-bottom:1rem;'>
-        <span style='color:#00b894;font-weight:600;font-size:0.8rem;'>LATEST</span>
-        <span style='color:#ffffff;font-size:0.9rem;margin-left:0.5rem;'>{news}</span>
-    </div>
-    """, unsafe_allow_html=True)
+    # ── Verified-source financial status ────────────────────
+    st.subheader("Club cash — not the same as investment valuations")
+    st.metric("Cash available after reserve (manual attestation)", snapshot_balance_label)
+    st.caption(bank_label + " · This is not a live bank API or an independent audit.")
+    st.warning(
+        "Contribution and investment figures are recorded ledger entries. "
+        "They must be reconciled with actual club bank and brokerage evidence."
+    )
+
+    # Never label hard-coded or synthetic headlines as latest news.
+    from khula_sarb import render_sarb_panel
+    with st.expander("🇿🇦 See independently sourced South African economic data"):
+        render_sarb_panel(expanded=False)
 
     # ── Portfolio Breakdown ─────────────────────────────────
     col_left, col_right = st.columns([2, 1])
@@ -206,8 +222,8 @@ def render_dashboard():
     with col_right:
         st.subheader("Quick Actions")
         actions = [
-            ("💰", "Make Contribution", "payment_tracking"),
-            ("🗳️", "Vote on Proposal", "member_voice"),
+            ("💰", "Review Contributions", "payments"),
+            ("🗳️", "Vote on Proposal", "voice"),
             ("🤖", "Ask AI Advisor", "ai_advisor"),
             ("🌍", "Global Markets", "global_markets"),
             ("🆔", "Verify ID", "id_verify"),

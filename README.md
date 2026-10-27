@@ -105,6 +105,33 @@ penetration, operational and compliance acceptance testing.
 - The app does not initiate a bank transfer, send investment orders, or send
   automated WhatsApp reminders.
 
+## October 27, 2026: public membership applications & Khula Compass
+
+Visitors can **request a membership account without an invitation code** when
+the club's verified POPIA and governance prerequisites permit actual member
+onboarding. Every public application creates an inactive, non-admin account,
+records privacy acknowledgement and overseas hosting consent, and appears in
+the active club administrator's **Membership Approvals** queue.
+
+**Registration alone never grants access.** The club administrator must
+independently verify contact/identity and membership eligibility before
+approving the applicant; rejection preserves a private audit record. Public
+applications cannot be enabled with the generic active-account checkbox,
+and ordinary members cannot assign themselves an administrator role.
+
+Members who are approved see **Khula Compass**: actual ledger contributions,
+savings goals, decisions, and a manual source-labelled cash snapshot with
+age/reserve safeguards. No unverified deposit, portfolio value or historical
+market price becomes spendable bank cash. Pending applicants cannot view
+member reports or private data.
+
+The production service remains **fail-closed** for new real-member details
+until the responsible party records real privacy, Information Officer,
+cloud-operator, overseas-transfer and constitution approvals. Do not set
+review flags to `1` without genuine evidence. This is not regulator-issued
+certification. The operator guide is in
+[Public membership pilot](docs/PUBLIC_MEMBERSHIP_LIVE_PILOT.md).
+
 ## October 2026: member invitations and official FNB bank-access application
 
 The **Member Invitations** admin page issues individual expiring codes with

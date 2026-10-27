@@ -47,14 +47,40 @@ def onboarding_gate_status(env=None):
         missing.append("Responsible party's verified full legal name")
     if not EMAIL.fullmatch(details["contact_email"]) or len(details["contact_email"]) > 254:
         missing.append("Valid Information Officer / privacy contact email")
-    if not re.fullmatch(r"[A-Za-z0-9._-]{4,64}", details["version"]):
-        missing.append("Approved privacy notice version identifier")
+    if (not re.fullmatch(r"[A-Za-z0-9._-]{4,64}", details["version"])
+            or "draft" in details["version"].lower()):
+        missing.append("Reviewed and approved (non-draft) privacy notice version")
+    doc = str(env.get("KHULA_CONSTITUTION_DOCUMENT_TEXT", ""))
+    doc_hash = str(env.get("KHULA_CONSTITUTION_SHA256", "")).lower()
+    constitution_version = str(env.get("KHULA_CONSTITUTION_VERSION", "")).strip()
+    if (len(doc) < 500 or len(doc) > 50000
+            or not re.fullmatch(r"[A-Za-z0-9._-]{4,64}", constitution_version)
+            or "draft" in constitution_version.lower()
+            or not re.fullmatch(r"[0-9a-f]{64}", doc_hash)
+            or hashlib.sha256(doc.encode("utf-8")).hexdigest() != doc_hash):
+        missing.append("Ratified constitution text, unique version and matching SHA-256 digest")
     return {
         "ready": not missing,
         "missing": missing,
         "details": details,
         "status": "operator-attested; not external certification",
     }
+
+
+def ratified_constitution(env=None):
+    """Return approved source text only when all integrity fields match."""
+    env = env if env is not None else os.environ
+    version = str(env.get("KHULA_CONSTITUTION_VERSION", "")).strip()
+    document = str(env.get("KHULA_CONSTITUTION_DOCUMENT_TEXT", ""))
+    expected = str(env.get("KHULA_CONSTITUTION_SHA256", "")).lower()
+    if (env.get("KHULA_CONSTITUTION_RATIFIED") == "1"
+            and len(document) >= 500 and len(document) <= 50000
+            and "draft" not in version.lower()
+            and re.fullmatch(r"[A-Za-z0-9._-]{4,64}", version)
+            and re.fullmatch(r"[0-9a-f]{64}", expected)
+            and hashlib.sha256(document.encode("utf-8")).hexdigest() == expected):
+        return {"version": version, "text": document, "sha256": expected}
+    return None
 
 
 def notice_text(env=None):

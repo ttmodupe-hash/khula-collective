@@ -16,6 +16,8 @@ from khula_account import render_change_password
 from khula_recovery import render_recovery_admin
 from khula_sarb import render_sarb_page, render_sarb_panel
 from khula_invitations import render_invitation_admin
+from khula_compliance import render_compliance_status
+from khula_bank_access import render_bank_access_admin
 from khula_member_services import (
     render_admin_reconciliation,
     render_club_goals,
@@ -208,6 +210,8 @@ def main():
             nav_items.append(("admin", "👑 Admin Panel"))
             nav_items.append(("reconciliation", "🧾 Reconciliation"))
             nav_items.append(("invites", "✉️ Member Invitations"))
+            nav_items.append(("bank_access", "🏦 FNB Bank Access"))
+            nav_items.append(("compliance", "🛡️ POPIA Readiness"))
             nav_items.append(("recoveries", "🔑 Account Recovery"))
         nav_items.append(("id_verify", "🆔 ID Verify"))
         nav_items.append(("profile", "👤 Profile"))
@@ -299,6 +303,10 @@ def main():
         render_admin_reconciliation()
     elif page == "invites":
         render_invitation_admin()
+    elif page == "bank_access":
+        render_bank_access_admin()
+    elif page == "compliance":
+        render_compliance_status()
     elif page == "recoveries":
         render_recovery_admin()
     elif page == "id_verify":

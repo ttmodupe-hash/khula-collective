@@ -52,11 +52,11 @@ class StreamlitPilotSmokeTests(unittest.TestCase):
                         "Do not render the None return of load_css().",
                     )
                     self.assertTrue(
-                        any("Welcome back" in w.body for w in at.get("subheader")),
+                        any("Welcome back" in str(w.value) for w in at.get("subheader")),
                         "The member sign-in card should render.",
                     )
                     self.assertTrue(
-                        any("New to Khula?" in w.body for w in at.get("subheader")),
+                        any("New to Khula?" in str(w.value) for w in at.get("subheader")),
                         "The prospective member section should render.",
                     )
 

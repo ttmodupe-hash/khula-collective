@@ -37,3 +37,9 @@ jobs:
           done
           echo "Railway did not serve the expected Khula PWA within the acceptance window."
           exit 1
+      - name: Verify secure mobile installer in disposable Android and iPhone browser views
+        run: |
+          pip install 'playwright>=1.56,<2.0'
+          python -m playwright install chromium
+          python scripts/check_install_browser.py \\
+            --url https://khula-collective-production.up.railway.app

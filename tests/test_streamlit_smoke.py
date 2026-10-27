@@ -94,7 +94,7 @@ class StreamlitPilotSmokeTests(unittest.TestCase):
                         default_timeout=25,
                     ).run()
                     self.assertEqual(len(at.exception), 0)
-                    self.assertTrue(any(w.label == "Username" for w in at.text_input))
+                    self.assertTrue(any(w.label == "Username or email" for w in at.text_input))
                     self.assertTrue(any(w.label == "Password" for w in at.text_input))
                     self.assertFalse(any(
                         "Submit membership request" in w.label for w in list(at.button)
@@ -138,7 +138,7 @@ class StreamlitPilotSmokeTests(unittest.TestCase):
                         default_timeout=30,
                     ).run()
                     self.assertEqual(len(at.exception), 0)
-                    username = next(w for w in at.text_input if w.label == "Username")
+                    username = next(w for w in at.text_input if w.label == "Username or email")
                     password = next(w for w in at.text_input if w.label == "Password")
                     username.set_value("pilotmember")
                     password.set_value("UniquePilotMemberPass2026!")

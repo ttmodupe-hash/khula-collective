@@ -72,18 +72,23 @@ def render_login():
         </div>
         """, unsafe_allow_html=True)
 
-        if st.session_state.pop("_khula_owner_setup_complete", False):
+        owner_username = st.session_state.get("_khula_owner_setup_complete")
+        if owner_username:
             st.success(
-                "Your Khula administrator account has been activated. "
-                "Sign in below using your chosen username and password. "
+                f"Your owner password is saved. Your username is: {owner_username}. "
+                "Sign in below with this username and your NEW password. "
                 "You can then approve requests under Membership Approvals."
             )
+
+        # The private link leads with setup/recovery, before normal sign-in.
+        render_owner_setup()
 
         with st.container(border=True):
             st.subheader("Welcome back")
             st.caption("Use your approved Khula member account.")
             with st.form("login_form"):
-                username = st.text_input("Username", placeholder="Enter username")
+                username = st.text_input("Username or email", value=owner_username or "",
+                                         placeholder="Enter your username or account email")
                 password = st.text_input("Password", type="password", placeholder="Enter password")
                 submitted = st.form_submit_button("Sign in to Khula", use_container_width=True, type="primary")
                 if submitted:
@@ -92,6 +97,7 @@ def render_login():
                         return
                     user = authenticate(username, password)
                     if user:
+                        st.session_state.pop("_khula_owner_setup_complete", None)
                         st.session_state.authenticated = True
                         st.session_state.logged_in = True
                         st.session_state.user_id = user[0]
@@ -106,7 +112,10 @@ def render_login():
                         st.success(f"Welcome back, {user[2]}!")
                         st.rerun()
                     else:
-                        st.error("Sign-in failed. Check your credentials, or ask the administrator whether your membership is approved.")
+                        st.error("Sign-in failed. Check your username/email and password. After 8 failed attempts, wait 15 minutes or use owner recovery with a fresh code. Pending members cannot sign in.")
+
+            st.link_button("Owner login help / reset password", "/?owner_setup=1")
+            st.caption("If an email is shared by multiple accounts, use your unique username.")
 
             st.link_button(
                 "📲 Add Khula to your phone",
@@ -115,10 +124,6 @@ def render_login():
                 type="secondary",
             )
             st.caption("Installing the app does not approve or create a member account.")
-
-        # The private owner setup link has no token in the URL. Only a fresh
-        # email-delivered code plus verified Railway owner email can grant admin.
-        render_owner_setup()
 
         with st.container(border=True):
             st.subheader("New to Khula? Apply for membership")

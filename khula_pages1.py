@@ -1,3 +1,4 @@
+from khula_recovery import render_member_recovery
 from html import escape
 from khula_member_services import submit_payment_claim
 from khula_security import register_member, registration_enabled, member_auth_state
@@ -102,6 +103,9 @@ def render_login():
         <div class='powered-by'>Collective savings &middot; Member governance &middot; Source-labelled research</div>
     </div>
     """, unsafe_allow_html=True)
+
+
+    render_member_recovery()
 
 def render_dashboard():
     """Main dashboard with portfolio overview, market data, and quick actions."""

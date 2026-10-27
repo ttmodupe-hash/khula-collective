@@ -11,6 +11,10 @@ from PIL import Image
 
 from scripts.generate_pwa_icons import generate_icons
 from scripts.patch_streamlit_pwa import inject_head, patch_index, MARKER
+from scripts.harden_install_page import (
+    render_secure_installer, validate_hardened_installer, build_install_page,
+    SCRIPT_PLACEHOLDER, STYLE_PLACEHOLDER,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -100,6 +104,63 @@ class KhulaMobilePwaTests(unittest.TestCase):
         self.assertNotIn("serviceWorker.register", page)
         self.assertNotIn("localStorage", page)
         self.assertNotIn("indexedDB", page)
+        self.assertNotIn("<iframe", page.lower())
+
+    def test_hardened_installer_blocks_unreviewed_inline_code(self):
+        template = INSTALLER.read_text(encoding="utf-8")
+        self.assertEqual(template.count(SCRIPT_PLACEHOLDER), 1)
+        self.assertEqual(template.count(STYLE_PLACEHOLDER), 1)
+        self.assertNotIn("'unsafe-inline'", template)
+        self.assertNotIn("'unsafe-eval'", template)
+        hardened = render_secure_installer(template)
+        self.assertTrue(validate_hardened_installer(hardened))
+        self.assertNotIn(SCRIPT_PLACEHOLDER, hardened)
+        self.assertNotIn(STYLE_PLACEHOLDER, hardened)
+        self.assertIn("script-src 'sha256-", hardened)
+        self.assertIn("style-src 'sha256-", hardened)
+        self.assertIn("connect-src 'none'", hardened)
+        self.assertIn("worker-src 'none'", hardened)
+        self.assertIn("form-action 'none'", hardened)
+        self.assertIn("manifest-src 'self'", hardened)
+
+        with tempfile.TemporaryDirectory() as temp:
+            target = Path(temp) / "install.html"
+            target.write_text(template, encoding="utf-8")
+            self.assertEqual(build_install_page(target, apply=False), hardened)
+            self.assertEqual(target.read_text(encoding="utf-8"), template)
+            self.assertEqual(build_install_page(target, apply=True), hardened)
+            self.assertEqual(build_install_page(target, apply=True), hardened)
+            self.assertEqual(target.read_text(encoding="utf-8"), hardened)
+
+        with self.assertRaises(ValueError):
+            validate_hardened_installer(
+                hardened.replace("Install Khula on this device", "Install unsafe app")
+            )
+        with self.assertRaises(ValueError):
+            validate_hardened_installer(
+                hardened.replace("#07120f", "#080808", 1)
+            )
+        with self.assertRaises(ValueError):
+            render_secure_installer(template.replace(
+                "script-src 'sha256-" + SCRIPT_PLACEHOLDER + "'",
+                "script-src 'unsafe-inline'",
+            ))
+        with self.assertRaises(ValueError):
+            render_secure_installer(template.replace(
+                "form-action 'none'", "form-action 'self'",
+            ))
+
+    def test_install_from_https_only_and_no_offline_financial_data(self):
+        page = INSTALLER.read_text(encoding="utf-8")
+        self.assertIn("khula-collective-production.up.railway.app", page)
+        self.assertIn("official HTTPS website", page)
+        self.assertIn("unofficial Khula APK", page)
+        self.assertIn('content="no-referrer"', page)
+        self.assertIn('content="noindex,nofollow,noarchive"', page)
+        self.assertNotIn("serviceWorker.register", page)
+        self.assertNotIn("localStorage", page)
+        self.assertNotIn("indexedDB", page)
+        self.assertNotIn("fetch(", page)
         self.assertNotIn("<iframe", page.lower())
 
     def test_static_serving_enabled_and_installer_accessible_from_login(self):

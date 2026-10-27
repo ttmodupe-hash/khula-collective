@@ -12,7 +12,7 @@ from datetime import datetime, timezone, timedelta
 
 import bcrypt
 from khula_invitations import email_normalised, verify_and_use_invitation
-from khula_compliance import onboarding_gate_status, record_notice_acknowledgement
+from khula_compliance import onboarding_gate_status, record_notice_acknowledgement, running_live
 
 
 def _is_demo_mode():
@@ -147,7 +147,7 @@ def registration_enabled():
     # operator and member-governance prerequisites are signed off.
     if _is_demo_mode():
         return False
-    return os.environ.get("KHULA_PRODUCTION") != "1" or onboarding_gate_status()["ready"]
+    return not running_live() or onboarding_gate_status()["ready"]
 
 
 def member_auth_state(db_path, user_id):
@@ -189,7 +189,7 @@ def register_member(db_path, username, full_name, email, password, invite_code, 
     The token and the account creation share the same SQLite transaction,
     preventing simultaneous redemption or uninvited registration.
     """
-    if os.environ.get("KHULA_PRODUCTION") == "1":
+    if running_live():
         if not onboarding_gate_status()["ready"]:
             raise ValueError("Real-member registration awaits the privacy and governance review.")
         if notice_acknowledged is not True:
@@ -217,6 +217,6 @@ def register_member(db_path, username, full_name, email, password, invite_code, 
         except sqlite3.IntegrityError as exc:
             raise ValueError("That username is already in use.") from exc
         verify_and_use_invitation(conn, email, invite_code, cursor.lastrowid)
-        if os.environ.get("KHULA_PRODUCTION") == "1":
+        if running_live():
             record_notice_acknowledgement(conn, cursor.lastrowid)
         return cursor.lastrowid

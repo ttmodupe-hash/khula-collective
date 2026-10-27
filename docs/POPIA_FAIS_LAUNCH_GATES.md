@@ -92,7 +92,11 @@ Before production invitation/registration:
 - `KHULA_INFORMATION_OFFICER_REGISTERED=1`
 - `KHULA_CROSS_BORDER_REVIEW_APPROVED=1`
 - `KHULA_OPERATOR_DPA_REVIEWED=1`
-- `KHULA_CONSTITUTION_RATIFIED=1`
+- `KHULA_CONSTITUTION_RATIFIED=1` (after a genuine club vote, not merely a code change)
+- `KHULA_CONSTITUTION_VERSION`: approved non-draft version identifier
+- `KHULA_CONSTITUTION_DOCUMENT_TEXT`: full ratified document text, maintained through a controlled bank/committee-approved process
+- `KHULA_CONSTITUTION_SHA256`: SHA-256 of the exact UTF-8 document text, validated by the server to prevent unnoticed edits
+
 
 The above are **self-attested operator controls**, not legal certification.
 They must never be turned on merely to hide warnings.

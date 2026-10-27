@@ -81,6 +81,7 @@ def activate_owner_admin(
     Explicitly creates a separate administrator account instead. The token
     and user write are atomic. No financial, club or member data is touched.
     """
+    override_time = now
     now = now if now is not None else datetime.now(timezone.utc)
     settings = _settings(env=env, now=now)
     if not settings:
@@ -103,8 +104,13 @@ def activate_owner_admin(
     hashed_password = hash_password(new_password)
     with sqlite3.connect(db_path, timeout=15) as conn:
         conn.execute("BEGIN IMMEDIATE")
-        # Validate timing again after a potentially long database lock.
-        if _settings(env=env, now=datetime.now(timezone.utc) if now is None else now) is None:
+        # Validate timing and challenge again after a potentially long DB lock.
+        again = _settings(
+            env=env,
+            now=now if override_time is not None else datetime.now(timezone.utc),
+        )
+        if not again or not hmac.compare_digest(
+                again["digest"], settings["digest"]):
             raise ValueError("Owner activation is unavailable or has expired.")
         ensure_owner_setup_table(conn)
         if conn.execute(
@@ -184,8 +190,10 @@ def render_owner_setup():
                 type="password", key="owner_admin_password_confirmation"
             )
             approval = st.checkbox(
-                "I control the verified Railway project-owner email and "
-                "understand that this account may review private membership requests.",
+                "I control the verified Railway project-owner email, "
+                "consent to my administrator account and password hash being "
+                "stored in Khula's disclosed Railway hosting region, and "
+                "understand this account can review private membership requests.",
                 key="owner_admin_confirm",
             )
             submit = st.form_submit_button(
@@ -204,10 +212,10 @@ def render_owner_setup():
                 except (ValueError, PermissionError) as exc:
                     st.error(str(exc))
                 else:
-                    st.success(
-                        "Your administrator account is activated. "
-                        "Sign in above with your new username and password, "
-                        "then open Membership Approvals in the sidebar."
-                    )
-                    # Never echo or retain the entered activation code, password
-                    # or any member identity in the session state.
+                    # Clear the entire public Streamlit session after a
+                    # privileged recovery (including form-widget secrets).
+                    # The next run displays only a non-secret success notice.
+                    st.session_state.clear()
+                    st.session_state["_khula_owner_setup_complete"] = True
+                    st.query_params.clear()
+                    st.rerun()

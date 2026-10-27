@@ -2,6 +2,7 @@ from khula_recovery import render_member_recovery
 from html import escape
 from khula_member_services import submit_payment_claim, latest_club_balance
 from khula_security import register_member, registration_enabled, member_auth_state
+from khula_compliance import render_public_notice, onboarding_gate_status
 from khula_advisory_core import bank_snapshot_fresh
 from khula_config import *
 from khula_utils import *
@@ -77,6 +78,14 @@ def render_login():
             else:
                 st.error("Invalid username or password")
 
+    render_public_notice()
+    if not registration_enabled():
+        st.warning(
+            "New real-member registrations are temporarily unavailable until "
+            "Khula's approved governance, privacy and hosting safeguards are recorded. "
+            "Existing active members can still sign in."
+        )
+
     if registration_enabled():
         with st.expander("New member? Register with your invitation"):
             with st.form("member_registration"):
@@ -86,13 +95,22 @@ def render_login():
                 new_password = st.text_input("Create a strong password (12+ characters)", type="password")
                 confirm_password = st.text_input("Confirm password", type="password")
                 invite = st.text_input("Invitation code", type="password")
+                acknowledged = st.checkbox(
+                    "I have read Khula's privacy notice and understand the purpose of member records, "
+                    "overseas hosting and administrator approval."
+                )
                 if st.form_submit_button("Create member account"):
-                    if new_password != confirm_password:
+                    if not acknowledged:
+                        st.error("Please read and acknowledge the privacy notice before registering.")
+                    elif new_password != confirm_password:
                         st.error("Passwords do not match.")
                     else:
                         try:
-                            register_member(DB_PATH, new_user, new_name, new_email, new_password, invite)
-                            st.success("Request submitted. An administrator must activate your account before you can sign in.")
+                            register_member(
+                                DB_PATH, new_user, new_name, new_email,
+                                new_password, invite, notice_acknowledged=acknowledged
+                            )
+                            st.success("Registration recorded. A club administrator must approve your account before login.")
                         except ValueError as exc:
                             st.error(str(exc))
 

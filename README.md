@@ -105,6 +105,37 @@ penetration, operational and compliance acceptance testing.
 - The app does not initiate a bank transfer, send investment orders, or send
   automated WhatsApp reminders.
 
+## October 2026: member invitations and official FNB bank-access application
+
+The **Member Invitations** admin page issues individual expiring codes with
+ready-to-copy personal emails. Codes are never sent to a mailing list, and no
+live members are silently imported from the old demonstration database.
+
+**Production invitation/registration is intentionally blocked until the
+Khula responsible party completes its POPIA and governance gates.** The public
+login page explains the purposes of processing and shows the draft privacy
+notice while the approval requirements are outstanding. Existing approved
+member accounts are not affected by this new-registration hold.
+The gate also requires the actual ratified constitution text, its approved
+version and matching SHA-256 digest; the original draft cannot be accepted
+as a final legal document.
+
+The **FNB Bank Access** admin page prepares an application for the bank's
+official **Transaction History API** and can record a genuine application
+case reference. This does not imply an account is connected. The bank's actual
+eligibility for a specific Khula Stokvel or business account, OAuth consent,
+fees and data-residency requirements must be confirmed by FNB first.
+
+Personalised investment allocations and share-affordability figures are
+**disabled by default** pending a documented FSCA/FAIS assessment.
+Contribution-only savings projections and official dated SARB research remain.
+
+See:
+- [POPIA, bank and FSCA readiness gates](docs/POPIA_FAIS_LAUNCH_GATES.md)
+- [FNB API application scope](docs/FNB_READ_ONLY_INTEGRATION_APPLICATION.md)
+- [Draft signatory authorisation](docs/FNB_SIGNATORY_RESOLUTION_TEMPLATE.md)
+- [Member invitations](docs/MEMBER_INVITATION_POLICY.md)
+
 ## Important financial and regulatory limits
 
 Khula's financial intelligence is **educational and read-only**. An attested

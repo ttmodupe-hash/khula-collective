@@ -91,6 +91,12 @@ def _render_quote(ticker, scenario_cash=None):
     if quote["is_market_open"] is False:
         st.info("The provider reports this market as closed.")
 
+    if os.environ.get("KHULA_FSP_ADVISORY_APPROVED") != "1":
+        st.caption(
+            "Personalised investment affordability and unit quantities are disabled "
+            "until the club obtains a documented FSCA/FAIS legal opinion or appropriate authorisation."
+        )
+        return
     if scenario_cash is None:
         st.caption("Affordability unavailable without a bank snapshot. No purchase proposal is made.")
         return
@@ -181,6 +187,13 @@ def render_investment_guide():
     st.write(f"Recorded contributions marked paid this month: R{context['this_month_contrib']:,.2f}")
     st.caption("Historical statuses should be reconciled against actual bank records before reliance.")
 
+    advisory_enabled = os.environ.get("KHULA_FSP_ADVISORY_APPROVED") == "1"
+    if not advisory_enabled:
+        st.warning(
+            "Individualised investment allocations and trade affordability are disabled "
+            "pending a South African FSCA/FAIS assessment. The guide can still explain "
+            "savings progress, financial literacy and official market observations."
+        )
     risk_values = ["conservative", "moderate", "aggressive"]
     previous = context.get("risk_profile", "moderate")
     risk = st.selectbox("Risk tolerance — for educational scenarios", risk_values,
@@ -193,32 +206,42 @@ def render_investment_guide():
         step=100.0,
     )
     allocation = illustrative_allocation(risk, years)
-    st.subheader("Example allocation buckets")
-    if years < 3:
-        st.warning("Short horizons prioritise liquidity and capital preservation over market exposure.")
-    st.write({
-        "Cash and emergency liquidity": f"{allocation['cash']}%",
-        "Diversified bonds": f"{allocation['bonds']}%",
-        "Broad diversified equities": f"{allocation['diversified_equity']}%",
-    })
-
-    # Without a bank snapshot, do not infer available money or allocate it.
+    # The available club cash figure is a bookkeeping input, NOT authority to
+    # select or trade any regulated financial product.
     investable = snap["available"] if snap else None
+    st.subheader("Contributions-only cash savings scenario")
     if investable is None:
-        st.info("Record an actual club-bank snapshot through Admin Reconciliation to activate amount scenarios.")
+        st.info("An administrator must reconcile a recent club bank statement before cash scenarios can be shown.")
     else:
-        amounts = allocation_amounts(investable, allocation)
-        st.dataframe(
-            [{"Illustrative bucket": key.replace("_", " ").title(), "ZAR": float(amount)}
-             for key, amount in amounts.items()],
-            use_container_width=True,
-        )
-        st.caption("Model allocation only. Reserve, current exposures, penalties and votes must be reviewed first.")
         estimated = no_growth_projection(investable, monthly, years * 12)
-        st.metric("Contributions-only scenario (0% return)", f"R{estimated:,.2f}")
-        st.caption("This scenario deliberately excludes investment returns, inflation, fees and tax.")
+        st.metric("Savings at 0% investment return", f"R{estimated:,.2f}")
+        st.caption(
+            "Pure contribution arithmetic. Not a forecast: no investment gains, "
+            "inflation, income taxes, fees or withdrawals are assumed."
+        )
 
-    _optional_llm_commentary(investable, risk, years, allocation)
+    if advisory_enabled:
+        st.subheader("Illustrative allocation — separately authorised feature")
+        if years < 3:
+            st.warning("Short investment horizons prioritise liquidity and capital protection.")
+        st.write({
+            "Cash and liquidity": f"{allocation['cash']}%",
+            "Diversified bonds": f"{allocation['bonds']}%",
+            "Diversified equity": f"{allocation['diversified_equity']}%",
+        })
+        if investable is not None:
+            amounts = allocation_amounts(investable, allocation)
+            st.dataframe(
+                [{"Illustrative bucket": k.replace("_", " ").title(),
+                  "ZAR": float(v)} for k, v in amounts.items()],
+                use_container_width=True,
+            )
+        _optional_llm_commentary(investable, risk, years, allocation)
+    else:
+        st.info(
+            "Learn about diversification, time horizons and risk below. "
+            "No individualised investment recommendation or buy quantity is offered."
+        )
     st.divider()
     from khula_public_markets import render_current_market_rates
     render_current_market_rates()

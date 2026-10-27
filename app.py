@@ -6,9 +6,11 @@ from datetime import datetime
 
 from khula_config import *
 from khula_utils import *
-from khula_pages1 import *
-from khula_pages2 import *
-from khula_pages3 import *
+# Explicit module routing prevents wildcard re-exports from silently replacing
+# the v4 member login with an obsolete v3 implementation.
+import khula_pages1 as member_core
+import khula_pages2 as identity_pages
+import khula_pages3 as club_pages
 from khula_security import bootstrap_admin, member_auth_state
 from khula_account import render_change_password
 from khula_recovery import render_recovery_admin
@@ -159,7 +161,7 @@ def main():
             return
 
     if not st.session_state.authenticated:
-        render_login()
+        member_core.render_login()
         with st.expander('🇿🇦 See sourced South African economic indicators'):
             render_sarb_panel(expanded=False)
         return
@@ -257,18 +259,18 @@ def main():
 
     page = st.session_state.nav_page
     if page == "dashboard":
-        render_dashboard()
+        member_core.render_dashboard()
     elif page == "fnb_sync":
         if os.environ.get("KHULA_ENABLE_PRIVATE_STATEMENT_IMPORT") == "1":
-            render_fnb_sync()
+            member_core.render_fnb_sync()
         else:
             st.warning("Private bank-statement import is disabled until storage, retention, privacy consent and reconciliation controls are approved.")
     elif page == "payments":
-        render_payment_progress()
+        member_core.render_payment_progress()
     elif page == "features":
-        render_feature_discovery()
+        club_pages.render_feature_discovery()
     elif page == "voice":
-        render_member_voice()
+        club_pages.render_member_voice()
     elif page == "constitution":
         render_constitution_review()
     elif page == "goals":
@@ -276,23 +278,23 @@ def main():
     elif page == "leaderboard":
         render_leaderboard()
     elif page == "directory":
-        render_directory()
+        club_pages.render_directory()
     elif page == "notifications":
-        render_notifications()
+        club_pages.render_notifications()
     elif page == "reports":
-        render_reports()
+        club_pages.render_reports()
     elif page == "ai_advisor":
-        render_ai_advisor()
+        member_core.render_ai_advisor()
     elif page == "global_markets":
-        render_global_markets()
+        member_core.render_global_markets()
     elif page == "economy":
         render_sarb_page()
     elif page == "whatsapp":
         render_communications()
     elif page == "fnb_api_guide":
-        render_fnb_api_guide()
+        identity_pages.render_fnb_api_guide()
     elif page == "admin":
-        render_admin()
+        club_pages.render_admin()
     elif page == "reconciliation":
         render_admin_reconciliation()
     elif page == "invites":
@@ -301,13 +303,13 @@ def main():
         render_recovery_admin()
     elif page == "id_verify":
         if os.environ.get("KHULA_ENABLE_ID_PRECHECK") == "1" and os.environ.get("KHULA_ID_HMAC_KEY"):
-            render_id_verification()
+            identity_pages.render_id_verification()
         else:
             st.warning("ID image processing is disabled until the privacy review and keyed-digest secret are configured.")
     elif page == "profile":
-        render_profile()
+        club_pages.render_profile()
     else:
-        render_dashboard()
+        member_core.render_dashboard()
 
     render_mobile_nav()
 

@@ -364,6 +364,9 @@ def render_profile():
 
     full_name, email, phone, contrib, theme, risk, notif = user
 
+    from khula_mentor_ui import render_mentor_profile_card
+    render_mentor_profile_card()
+
     with st.form("profile_form"):
         st.text_input("Verified full name", value=full_name or "", disabled=True)
         st.text_input("Membership contact email", value=email or "", disabled=True)

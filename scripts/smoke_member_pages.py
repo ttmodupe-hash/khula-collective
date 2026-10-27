@@ -26,7 +26,7 @@ MEMBER_PAGES = (
     "dashboard", "payments", "voice", "constitution", "goals",
     "leaderboard", "directory", "notifications", "reports",
     "ai_advisor", "global_markets", "profile", "features", "whatsapp",
-    "fnb_sync", "id_verify",
+    "fnb_sync", "id_verify", "mentor",
 )
 ADMIN_PAGES = (
     "admin", "membership_approvals", "launch_center",

@@ -24,6 +24,10 @@ capabilities recovered from the [original Khula Collective application](https://
   API key and explicit launch flag** are configured. Quotes show actual provider
   timestamps and may be delayed. No fabricated market ticks.
 - Optional consent-triggered OpenAI educational commentary (off by default).
+- Khula Mentor in each member's Profile: ten financial lessons, private optional progress,
+  knowledge checks, a hypothetical investment lab and a clearly labelled lesson lookup.
+  The optional live AI tutor requires separate configuration and review; see
+  [Khula Mentor](docs/KHULA_MENTOR.md).
 
 **Not enabled**: real FNB/Stitch bank APIs, automated investment orders, card
 payments, WhatsApp/Twilio sending, production FICA certification, and real-time

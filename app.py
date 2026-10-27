@@ -20,6 +20,7 @@ from khula_compliance import render_compliance_status
 from khula_bank_access import render_bank_access_admin
 from khula_applications import render_membership_approvals
 from khula_compass import render_compass
+from khula_mentor_ui import render_mentor
 from khula_launch_center import render_launch_center
 from khula_member_services import (
     render_admin_reconciliation,
@@ -204,6 +205,7 @@ def main():
             ("fnb_sync", "🏦 FNB Sync"),
             ("payments", "💰 Payments"),
             ("features", "✨ Discover"),
+            ("mentor", "🌱 Khula Mentor"),
             ("voice", "🗳️ Member Voice"),
             ("constitution", "📜 Constitution"),
             ("goals", "🎯 Savings Goals"),
@@ -302,6 +304,8 @@ def main():
         club_pages.render_reports()
     elif page == "ai_advisor":
         member_core.render_ai_advisor()
+    elif page == "mentor":
+        render_mentor()
     elif page == "global_markets":
         member_core.render_global_markets()
     elif page == "economy":

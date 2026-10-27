@@ -116,6 +116,9 @@ Khula responsible party completes its POPIA and governance gates.** The public
 login page explains the purposes of processing and shows the draft privacy
 notice while the approval requirements are outstanding. Existing approved
 member accounts are not affected by this new-registration hold.
+The gate also requires the actual ratified constitution text, its approved
+version and matching SHA-256 digest; the original draft cannot be accepted
+as a final legal document.
 
 The **FNB Bank Access** admin page prepares an application for the bank's
 official **Transaction History API** and can record a genuine application

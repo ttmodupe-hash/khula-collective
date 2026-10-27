@@ -365,9 +365,13 @@ def render_profile():
     full_name, email, phone, contrib, theme, risk, notif = user
 
     with st.form("profile_form"):
-        new_name = st.text_input("Full Name", value=full_name or "")
-        new_email = st.text_input("Email", value=email or "")
-        new_phone = st.text_input("Phone", value=phone or "")
+        st.text_input("Verified full name", value=full_name or "", disabled=True)
+        st.text_input("Membership contact email", value=email or "", disabled=True)
+        st.caption(
+            "Your approved identity/contact cannot be changed by a profile edit. "
+            "Ask the club administrator for a verified correction using the official privacy contact."
+        )
+        new_phone = st.text_input("Preferred phone number (optional)", value=phone or "")
         st.caption(f"Club-assigned monthly target: R{float(contrib or 0):,.2f}. Only an administrator can change this.")
         new_theme = st.selectbox("Theme", ["dark", "light"], index=0 if theme == "dark" else 1)
         new_risk = st.selectbox("Risk Profile", ["conservative", "moderate", "aggressive"], index=["conservative", "moderate", "aggressive"].index(risk or "moderate"))
@@ -376,9 +380,10 @@ def render_profile():
         if st.form_submit_button("💾 Save Changes", use_container_width=True):
             conn = sqlite3.connect(DB_PATH)
             c = conn.cursor()
-            c.execute("""UPDATE Users SET full_name=?, email=?, phone=?,
-                      theme_preference=?, risk_profile=?, notification_prefs=? WHERE user_id=?""",
-                      (new_name, new_email, new_phone, new_theme, new_risk, ",".join(new_notif), st.session_state.user_id))
+            c.execute("""UPDATE Users SET phone=?,
+                      theme_preference=?, risk_profile=?, notification_prefs=?
+                      WHERE user_id=? AND is_active=1""",
+                      (new_phone[:30], new_theme, new_risk, ",".join(new_notif), st.session_state.user_id))
             conn.commit()
             conn.close()
             st.session_state.theme = new_theme

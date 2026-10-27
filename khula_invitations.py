@@ -10,7 +10,7 @@ import secrets
 import sqlite3
 from datetime import datetime, timezone, timedelta
 import os
-from khula_compliance import onboarding_gate_status, organisation_details
+from khula_compliance import onboarding_gate_status, organisation_details, running_live
 
 EMAIL_PATTERN = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 
@@ -43,7 +43,7 @@ def ensure_invitation_table(conn):
 def generate_invitation(db_path, admin_id, email, hours=168):
     # An invitation identifies a real person; require signed-off safeguards
     # before creating this record on the production service.
-    if os.environ.get("KHULA_PRODUCTION") == "1" and not onboarding_gate_status()["ready"]:
+    if running_live() and not onboarding_gate_status()["ready"]:
         raise ValueError("Invitation issue is paused pending POPIA and governance approvals.")
     email = email_normalised(email)
     if not isinstance(hours, int) or not 1 <= hours <= 168:

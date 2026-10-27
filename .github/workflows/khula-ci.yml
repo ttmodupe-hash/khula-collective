@@ -30,6 +30,7 @@ jobs:
           pip install -r requirements.txt
       - name: Validate Khula PWA assets and Streamlit head compatibility
         run: |
+          python scripts/harden_install_page.py --check
           python scripts/generate_pwa_icons.py --output-dir static
           python scripts/patch_streamlit_pwa.py --check
       - name: Validate Python syntax

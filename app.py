@@ -11,6 +11,7 @@ from khula_pages2 import *
 from khula_pages3 import *
 from khula_security import bootstrap_admin, member_auth_state
 from khula_account import render_change_password
+from khula_recovery import render_recovery_admin
 from khula_sarb import render_sarb_page, render_sarb_panel
 from khula_invitations import render_invitation_admin
 from khula_member_services import (
@@ -205,6 +206,7 @@ def main():
             nav_items.append(("admin", "👑 Admin Panel"))
             nav_items.append(("reconciliation", "🧾 Reconciliation"))
             nav_items.append(("invites", "✉️ Member Invitations"))
+            nav_items.append(("recoveries", "🔑 Account Recovery"))
         nav_items.append(("id_verify", "🆔 ID Verify"))
         nav_items.append(("profile", "👤 Profile"))
 
@@ -295,6 +297,8 @@ def main():
         render_admin_reconciliation()
     elif page == "invites":
         render_invitation_admin()
+    elif page == "recoveries":
+        render_recovery_admin()
     elif page == "id_verify":
         if os.environ.get("KHULA_ENABLE_ID_PRECHECK") == "1" and os.environ.get("KHULA_ID_HMAC_KEY"):
             render_id_verification()

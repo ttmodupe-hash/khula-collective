@@ -9,7 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import khula_config
-from khula_applications import request_membership, review_membership_request
+from khula_applications import request_membership, review_membership_request, membership_decision_email
 from khula_invitations import generate_invitation
 from khula_membership_receipts import get_public_application_status, ensure_receipt_schema
 from khula_security import hash_password, register_member, authenticate_user
@@ -158,6 +158,29 @@ class MembershipReceiptTests(unittest.TestCase):
             identity_confirmed=True, eligibility_confirmed=True,
         )
         self.assertIsNotNone(authenticate_user(self.db, "invited", "InvitedStrongPassword2026!"))
+
+    def test_reviewed_member_emails_are_private_drafts_not_credentials(self):
+        approved = membership_decision_email(
+            "Prospective Member", "member@example.invalid", "approved"
+        )
+        self.assertEqual(approved["to"], "member@example.invalid")
+        self.assertIn("approved", approved["subject"])
+        self.assertIn("https://khula-collective-production.up.railway.app", approved["body"])
+        self.assertIn("sign in", approved["body"])
+        self.assertNotIn("CandidateStrongPassword2026!", approved["body"])
+        self.assertNotIn("password:", approved["body"].lower())
+        rejected = membership_decision_email(
+            "Prospective Member", "member@example.invalid", "rejected"
+        )
+        self.assertIn("not approved", rejected["body"])
+        with self.assertRaises(ValueError):
+            membership_decision_email(
+                "Prospective Member", "member@example.invalid", "pending"
+            )
+        with self.assertRaises(ValueError):
+            membership_decision_email(
+                "Prospective Member", "not-an-email", "approved"
+            )
 
     def test_invited_member_cannot_omit_age_or_overseas_acknowledgement(self):
         invitation = generate_invitation(self.db, 1, "notready@example.invalid")

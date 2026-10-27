@@ -54,7 +54,9 @@ COPY .streamlit/ .streamlit/
 COPY static/ static/
 COPY scripts/generate_pwa_icons.py scripts/
 COPY scripts/patch_streamlit_pwa.py scripts/
-RUN python scripts/generate_pwa_icons.py --output-dir /app/static \
+COPY scripts/harden_install_page.py scripts/
+RUN python scripts/harden_install_page.py --apply \
+    && python scripts/generate_pwa_icons.py --output-dir /app/static \
     && python scripts/patch_streamlit_pwa.py --apply
 
 # Drop privileges for the application after mounting the writable ledger volume.

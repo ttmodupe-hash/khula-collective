@@ -38,5 +38,7 @@ jobs:
         run: sh -n khula_entrypoint.sh
       - name: Run unit and financial-control tests
         run: python -m unittest discover -s tests -v
+      - name: Open all member and administrator pages with isolated ledger
+        run: python scripts/smoke_member_pages.py
       - name: Import production modules
         run: python -c "import khula_ai_engine; import khula_member_services; import khula_intelligence; import app"

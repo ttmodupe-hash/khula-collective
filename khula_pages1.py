@@ -109,6 +109,10 @@ def render_login():
             )
             st.caption("Installing the app does not approve or create a member account.")
 
+        # The private owner setup link has no token in the URL. Only a fresh
+        # email-delivered code plus verified Railway owner email can grant admin.
+        render_owner_setup()
+
         with st.container(border=True):
             st.subheader("New to Khula? Apply for membership")
             st.caption(

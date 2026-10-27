@@ -3,6 +3,7 @@ from html import escape
 from khula_member_services import submit_payment_claim, latest_club_balance
 from khula_security import register_member, registration_enabled, member_auth_state
 from khula_applications import request_membership, public_registration_enabled
+from khula_membership_receipts import render_receipt_lookup
 from khula_compliance import render_public_notice, onboarding_gate_status
 from khula_advisory_core import bank_snapshot_fresh
 from khula_config import *
@@ -155,28 +156,47 @@ def render_login():
                         st.error("Passwords do not match.")
                     else:
                         try:
+                            st.session_state.pop("_khula_last_receipt", None)
                             if invite.strip():
-                                register_member(
+                                result = register_member(
                                     DB_PATH, new_user, new_name, new_email,
                                     new_password, invite,
-                                    notice_acknowledged=acknowledged
+                                    notice_acknowledged=acknowledged,
+                                    international_transfer_acknowledged=transferred,
+                                    adult_confirmed=adult,
+                                    include_receipt=True,
                                 )
                             else:
-                                request_membership(
+                                result = request_membership(
                                     DB_PATH, new_user, new_name, new_email,
                                     new_password,
                                     notice_acknowledged=acknowledged,
                                     international_transfer_acknowledged=transferred,
                                     adult_confirmed=adult,
+                                    include_receipt=True,
                                 )
+                            if isinstance(result, dict):
+                                st.session_state["_khula_last_receipt"] = result["tracking_code"]
                             st.success(
-                                "Your membership request was recorded. "
-                                "You do NOT have access yet. The club administrator "
-                                "must independently verify and approve your application. "
+                                "Your request was recorded, but you CANNOT sign in yet. "
+                                "An active club administrator must independently verify "
+                                "and approve your membership. "
                                 "No automatic email has been sent."
                             )
                         except (ValueError, PermissionError) as exc:
                             st.error(str(exc))
+
+    tracking = st.session_state.get("_khula_last_receipt")
+    if tracking:
+        st.success("Save your private membership tracking code now. It is displayed only in this browser session.")
+        st.code(tracking, language=None)
+        st.caption(
+            "Use the code in 'Check your membership status' below. "
+            "Never share it in a group. The code lasts up to 45 days."
+        )
+        if st.button("Hide the tracking code"):
+            st.session_state.pop("_khula_last_receipt", None)
+            st.rerun()
 
     st.markdown("""
         </div>
@@ -188,6 +208,7 @@ def render_login():
     """, unsafe_allow_html=True)
 
 
+    render_receipt_lookup()
     render_member_recovery()
 
 def render_dashboard():

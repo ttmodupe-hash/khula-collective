@@ -28,6 +28,45 @@ eligibility rules. Some browsers may instead create a home-screen shortcut.
 The Safari menu location and wording vary by iOS version. Apple supplies
 the installation action; Khula does not silently install itself.
 
+## Safe installation and fraud prevention
+
+**Only install the official web app over HTTPS.** The exact address must be:
+`khula-collective-production.up.railway.app`. Verify it in your mobile
+browser before selecting Install/Add to Home Screen. Do not use a shortened,
+forwarded or look-alike link that points to a different host.
+
+- **No unofficial APK/IPA:** This release does not distribute a native
+  Android installer, iPhone installer or ZIP. An attachment claiming to be
+  "Khula.apk" is **not** an official Khula release.
+- **No bank login needed:** Installation does not ask for FNB internet
+  banking credentials, an OTP, a PIN, card details or ID documents.
+- **No automatic membership:** Installing the home-screen web app never
+  bypasses the club's identity and administrator-approval process.
+- **No private offline storage:** The install page registers no service
+  worker. Private data must still be fetched from the approved online session.
+- **Browser prompts vary:** An Add to Home Screen shortcut is possible even
+  when an operating-system WebAPK is not supported; do not treat missing
+  install prompts as a reason to sideload software.
+
+## Security controls for the installation page
+
+- HTTPS/TLS origin validated by an independent production GitHub runner; 
+  redirects to another host fail the acceptance check.
+- The reviewed install page uses an exact **SHA-256 CSP hash** for its
+  own inline CSS and JavaScript; `unsafe-inline` and `unsafe-eval` are
+  forbidden. Changing the script or CSS requires regenerating the CSP hash
+  during a trusted Docker build or the validation fails.
+- The installer forbids network fetches, workers, frames, forms, plugins,
+  external styles/fonts and unreviewed inline event handlers.
+- Its PWA manifest and PNG icons are served from the same HTTPS origin,
+  with `X-Content-Type-Options: nosniff` confirmed in acceptance checks.
+- Mobile Chromium tests simulate Android and iPhone browsers; they verify
+  install guidance runs under the CSP without enabling a service worker.
+- This does **not** mean that an independently signed APK exists or that
+  the whole Streamlit platform has passed a penetration test. Strict HTTP
+  security headers for all application routes, operator review, backups,
+  privacy compliance, MFA and genuine bank permissions are separate tasks.
+
 ## What does the installed app do?
 
 - Khula opens in a standalone, phone-friendly window with a branded icon.

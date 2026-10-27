@@ -54,6 +54,13 @@ def render_login():
         <div class='login-card'>
     """, unsafe_allow_html=True)
 
+    st.link_button(
+        "📲 Install Khula on your phone",
+        "/app/static/install.html",
+        use_container_width=True,
+        type="secondary",
+    )
+
     with st.form("login_form"):
         username = st.text_input("Username", placeholder="Enter username")
         password = st.text_input("Password", type="password", placeholder="Enter password")

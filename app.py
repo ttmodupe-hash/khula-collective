@@ -182,6 +182,12 @@ def main():
 
         st.divider()
 
+        st.link_button(
+            "📲 Install Khula on your phone",
+            "/app/static/install.html",
+            use_container_width=True,
+        )
+
         new_theme = st.toggle("🌓 Dark Mode", value=(st.session_state.theme == "dark"))
         if new_theme != (st.session_state.theme == "dark"):
             st.session_state.theme = "dark" if new_theme else "light"

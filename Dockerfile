@@ -49,6 +49,14 @@ COPY khula_intelligence.py .
 COPY khula_entrypoint.sh /usr/local/bin/khula-entrypoint
 COPY .streamlit/ .streamlit/
 
+# Installable, online-only Progressive Web App shell. Static content is public
+# branding/help only: never cache or ship the club's private SQLite ledger.
+COPY static/ static/
+COPY scripts/generate_pwa_icons.py scripts/
+COPY scripts/patch_streamlit_pwa.py scripts/
+RUN python scripts/generate_pwa_icons.py --output-dir /app/static \
+    && python scripts/patch_streamlit_pwa.py --apply
+
 # Drop privileges for the application after mounting the writable ledger volume.
 RUN useradd -m -u 1000 appuser \
     && chown -R appuser:appuser /app \

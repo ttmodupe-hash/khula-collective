@@ -30,7 +30,7 @@ class StreamlitPilotSmokeTests(unittest.TestCase):
                 "KHULA_BOOTSTRAP_ADMIN_PASSWORD": "",
             }):
                 with patch.object(khula_config, "DB_PATH", path):
-                    at = AppTest.from_file("app.py", default_timeout=25).run()
+                    at = AppTest.from_file(str(Path(__file__).resolve().parents[1] / "app.py"), default_timeout=25).run()
                     self.assertEqual(
                         len(at.exception), 0,
                         "Public landing should never render a Python exception",

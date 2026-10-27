@@ -100,6 +100,9 @@ def ensure_tracking_schema(conn):
 def record_application_submission(db_path, admin_id, reference):
     """Tracks the bank-application step, not a live connection or bank approval."""
     reference = str(reference).strip()
+    # Avoid confusing bank account identifiers with an application case number.
+    if re.fullmatch(r"[0-9]{8,18}", reference):
+        raise ValueError("Use the FNB case number, never the club's bank account number.")
     if not 5 <= len(reference) <= 70 or not re.fullmatch(r"[A-Za-z0-9_./-]+", reference):
         raise ValueError("Use only the official FNB contact/application reference (5–70 characters).")
     now = datetime.now(timezone.utc).isoformat()

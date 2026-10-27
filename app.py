@@ -19,6 +19,7 @@ from khula_invitations import render_invitation_admin
 from khula_compliance import render_compliance_status
 from khula_bank_access import render_bank_access_admin
 from khula_applications import render_membership_approvals
+from khula_compass import render_compass
 from khula_member_services import (
     render_admin_reconciliation,
     render_club_goals,
@@ -265,7 +266,7 @@ def main():
 
     page = st.session_state.nav_page
     if page == "dashboard":
-        member_core.render_dashboard()
+        render_compass()
     elif page == "fnb_sync":
         if os.environ.get("KHULA_ENABLE_PRIVATE_STATEMENT_IMPORT") == "1":
             member_core.render_fnb_sync()
@@ -321,7 +322,7 @@ def main():
     elif page == "profile":
         club_pages.render_profile()
     else:
-        member_core.render_dashboard()
+        render_compass()
 
     render_mobile_nav()
 

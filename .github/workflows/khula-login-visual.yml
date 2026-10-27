@@ -1,0 +1,62 @@
+name: Khula public login visual acceptance
+
+on:
+  push:
+    branches:
+      - 'feature/khula-login-layout-fix-20261027'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: khula-login-visual-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  desktop-and-mobile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install app and headless-browser test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install 'playwright>=1.56,<2.0'
+          python -m playwright install chromium
+          python scripts/generate_pwa_icons.py --output-dir static
+      - name: Test real Khula login in an isolated browser
+        env:
+          KHULA_DEMO_MODE: "0"
+          KHULA_PRODUCTION: "0"
+          RAILWAY_ENVIRONMENT_NAME: production
+          KHULA_DB_PATH: ${{ runner.temp }}/khula-visual-only.db
+          KHULA_BOOTSTRAP_ADMIN_USER: ""
+          KHULA_BOOTSTRAP_ADMIN_PASSWORD: ""
+          KHULA_PRIVACY_NOTICE_APPROVED: "0"
+        run: |
+          python -m streamlit run app.py --server.headless=true --server.port=8501 \
+            --server.address=127.0.0.1 > /tmp/khula-visual-server.log 2>&1 &
+          echo $! > /tmp/khula-visual-server.pid
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8501/_stcore/health; then
+              break
+            fi
+            sleep 2
+          done
+          python scripts/check_login_layout.py --screenshots visual-tests
+      - name: Save screenshots for desktop and mobile review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: khula-login-desktop-and-mobile
+          path: |
+            visual-tests/*.png
+            /tmp/khula-visual-server.log
+          retention-days: 7
+          if-no-files-found: ignore

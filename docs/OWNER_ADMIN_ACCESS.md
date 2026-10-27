@@ -66,6 +66,10 @@ public membership registration and grants no permission to another member.
 
 ## Recovery failure
 
+For the proposed owner-only policy, bootstrap-rotation caveat and isolated
+backup tooling, see [Owner control and recovery plan](OWNER_CONTROL_AND_RECOVERY_PLAN.md).
+That plan does not enable owner-only approval or attest to production backups.
+
 - If the code has expired, create a **new** approved one-time recovery code
   through the verified Railway project owner, not through public registration.
 - If the account username already exists, choose another unique admin name;

@@ -1,0 +1,47 @@
+{
+  "id": "/",
+  "name": "Khula Collective",
+  "short_name": "Khula",
+  "description": "Private collective savings, member contributions, goals and club governance, with reviewed financial records.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0a",
+  "theme_color": "#00b894",
+  "lang": "en-ZA",
+  "dir": "ltr",
+  "orientation": "any",
+  "categories": [
+    "finance",
+    "productivity"
+  ],
+  "prefer_related_applications": false,
+  "icons": [
+    {
+      "src": "/app/static/khula-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/app/static/khula-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/app/static/khula-icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Khula member portal",
+      "short_name": "Open Khula",
+      "url": "/",
+      "description": "Access your approved Khula membership"
+    }
+  ]
+}

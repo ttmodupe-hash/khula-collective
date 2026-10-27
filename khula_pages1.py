@@ -18,205 +18,224 @@ from datetime import datetime, timedelta
 # ============================================================
 
 def render_login():
-    """Login page with centered branding."""
-    is_dark = st.session_state.get("theme", "dark") == "dark"
-    bg = "#0f0f23" if is_dark else "#f8f9fa"
-    card = "#1e1e30" if is_dark else "#ffffff"
-    text = "#ffffff" if is_dark else "#1a1a2e"
-    text_muted = "#a0a0b0" if is_dark else "#6c757d"
-    border = "#2a2a40" if is_dark else "#dee2e6"
-    accent = "#00b894"
+    """A responsive, properly contained public login and membership landing.
 
-    st.markdown(f"""
+    Use native Streamlit layout containers: ordinary HTML div wrappers
+    cannot contain Streamlit form widgets, and were causing the screenshot's
+    full-width form with an empty, narrow HTML-only brand panel.
+    """
+    st.markdown("""
     <style>
-    .stApp {{ background: {bg} !important; color: {text} !important; }}
-    .login-container {{ max-width: 420px; margin: 0 auto; padding: 2rem; }}
-    .login-logo {{ text-align: center; margin-bottom: 1.5rem; }}
-    .login-logo h1 {{ color: {accent}; font-weight: 800; font-size: 2.2rem; margin: 0; }}
-    .login-logo p {{ color: {text_muted}; font-size: 1rem; margin-top: 0.25rem; }}
-    .login-card {{ background: {card}; padding: 2rem; border-radius: 20px; border: 1px solid {border}; box-shadow: 0 8px 32px rgba(0,0,0,0.12); }}
-    .login-input {{ margin-bottom: 1rem; }}
-    .login-btn {{ width: 100%; background: linear-gradient(135deg, {accent}, #00cec9); color: white; border: none; padding: 0.85rem; border-radius: 12px; font-weight: 600; font-size: 1rem; cursor: pointer; }}
-    .login-btn:hover {{ opacity: 0.9; }}
-    .version-tag {{ text-align: center; color: {accent}; font-weight: 600; font-size: 0.9rem; margin-bottom: 1rem; }}
-    .demo-box {{ background: {card}; padding: 1rem; border-radius: 12px; border: 1px solid {border}; margin-top: 1.5rem; font-size: 0.85rem; color: {text_muted}; }}
-    .powered-by {{ text-align: center; color: {text_muted}; font-size: 0.8rem; margin-top: 2rem; }}
+      .stApp { background: #0d1022 !important; }
+      [data-testid="stMainBlockContainer"] {
+        padding-top: clamp(1.25rem, 4vh, 2.75rem);
+        padding-bottom: 2rem;
+      }
+      .khula-auth-hero { text-align: center; margin: 0 auto 1.2rem; max-width: 34rem; }
+      .khula-auth-hero img { display:block; width:72px; height:72px; margin:0 auto 1rem;
+        border-radius:20px; box-shadow:0 15px 36px rgba(0,0,0,.32); }
+      .khula-auth-hero h1 { margin:.25rem 0 .55rem; color:#f5fff7;
+        font-size:clamp(1.75rem,4.6vw,2.4rem); line-height:1.15; font-weight:800;
+        letter-spacing:-.04em; }
+      .khula-auth-hero .eyebrow { color:#6be0ad; letter-spacing:.13em;
+        font-size:.72rem; font-weight:800; text-transform:uppercase; }
+      .khula-auth-hero p { margin:.3rem auto; color:#afc8bd;
+        font-size:.98rem; line-height:1.5; max-width:33ch; }
+      .khula-login-steps { display:flex; flex-wrap:wrap; justify-content:center;
+        gap:.4rem; margin:.9rem auto 1.25rem; }
+      .khula-login-steps span { padding:.38rem .65rem; border:1px solid #285945;
+        border-radius:99px; background:#18382c; color:#c1ecd0; font-size:.75rem; }
+      @media (max-width:640px) {
+        [data-testid="stMainBlockContainer"] {padding-left:1rem;padding-right:1rem;}
+        .khula-auth-hero img {width:60px;height:60px;}
+        .khula-auth-hero {margin-bottom:.7rem;}
+      }
     </style>
     """, unsafe_allow_html=True)
 
-    st.markdown("""
-    <div class='login-container'>
-        <div class='login-logo'>
-            <h1>📈 Khula Collective</h1>
-            <p>Transparent savings, responsible investing and shared decisions</p>
+    # Center actual Streamlit widgets, not a raw HTML wrapper.
+    _, main_col, _ = st.columns([1, 2.2, 1], gap="large")
+    with main_col:
+        st.markdown("""
+        <header class="khula-auth-hero">
+          <img src="/app/static/khula-icon-192.png" alt="Khula Collective icon">
+          <div class="eyebrow">Members · Savings · Shared decisions</div>
+          <h1>Khula Collective</h1>
+          <p>A private home for collective savings, transparent records
+          and better financial decisions.</p>
+        </header>
+        <div class="khula-login-steps">
+          <span>1. Request access</span>
+          <span>2. Club approval</span>
+          <span>3. Secure sign-in</span>
         </div>
-        <div class='version-tag'>Khula Member Portal &middot; Trusted Records</div>
-        <div class='login-card'>
-    """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
 
-    st.link_button(
-        "📲 Install Khula on your phone",
-        "/app/static/install.html",
-        use_container_width=True,
-        type="secondary",
-    )
-
-    with st.form("login_form"):
-        username = st.text_input("Username", placeholder="Enter username")
-        password = st.text_input("Password", type="password", placeholder="Enter password")
-        submitted = st.form_submit_button("🔓 Sign In")
-        if submitted:
-            if not username or not password:
-                st.error("Please enter both username and password")
-                return
-            user = authenticate(username, password)
-            if user:
-                st.session_state.authenticated = True
-                st.session_state.logged_in = True
-                st.session_state.user_id = user[0]
-                st.session_state.username = user[1]
-                st.session_state.full_name = user[2]
-                st.session_state.role = user[3]
-                state = member_auth_state(DB_PATH, user[0])
-                st.session_state._auth_epoch = state[3]
-                st.session_state.theme = user[4] or "dark"
-                st.session_state.nav_page = "dashboard"
-                st.success(f"Welcome back, {user[2]}!")
-                time.sleep(1)
-                st.rerun()
-            else:
-                st.error("Sign-in failed. Check your credentials, or ask the administrator whether your membership is approved.")
-
-    st.divider()
-    st.subheader("New to Khula? Apply for membership")
-    st.caption(
-        "Anyone may request an account when enrolment is open. "
-        "Only the club's administrator can approve access to member records "
-        "and financial features. Signing up does not automatically make you a member."
-    )
-    render_public_notice()
-
-    if not public_registration_enabled():
-        if registration_enabled():
-            st.warning(
-                "Public applications are temporarily paused by the club administrator. "
-                "Existing approved members can still sign in."
-            )
-        else:
-            st.warning(
-                "New requests are temporarily closed until Khula's privacy notice, "
-                "club governance and overseas-hosting safeguards have been formally "
-                "reviewed. No personal registration data is collected while closed."
-            )
-    else:
-        with st.expander("Apply for access — invitation code optional", expanded=True):
-            with st.form("member_registration"):
-                new_user = st.text_input(
-                    "Choose username", key="join_username",
-                    help="Letters, digits and underscore; first character a letter."
-                )
-                new_name = st.text_input(
-                    "Full name", key="join_name"
-                )
-                new_email = st.text_input(
-                    "Your email address", key="join_email",
-                    help="The administrator must verify that you control this email address before approval."
-                )
-                new_password = st.text_input(
-                    "Create password (12–72 UTF-8 bytes)",
-                    type="password", key="join_password"
-                )
-                confirm_password = st.text_input(
-                    "Confirm password", type="password", key="join_password_confirmation"
-                )
-                invite = st.text_input(
-                    "Invitation code (leave blank to request membership)",
-                    type="password", key="join_invitation"
-                )
-                adult = st.checkbox(
-                    "I confirm I am at least 18 years old and am applying for myself.",
-                    key="join_adult"
-                )
-                acknowledged = st.checkbox(
-                    "I have read the Khula privacy notice and understand the "
-                    "purpose of my registration details and administrator review.",
-                    key="join_privacy"
-                )
-                transferred = st.checkbox(
-                    "I acknowledge and expressly consent to the transfer "
-                    "of my registration details to the overseas Railway hosting region "
-                    "identified in the privacy notice.",
-                    key="join_overseas"
-                )
-                st.caption(
-                    "Applications are private. No contribution is due for registration; "
-                    "do not send bank account details, identity images, PINs or OTPs."
-                )
-                submitted = st.form_submit_button("Submit membership request")
+        with st.container(border=True):
+            st.subheader("Welcome back")
+            st.caption("Use your approved Khula member account.")
+            with st.form("login_form"):
+                username = st.text_input("Username", placeholder="Enter username")
+                password = st.text_input("Password", type="password", placeholder="Enter password")
+                submitted = st.form_submit_button("Sign in to Khula", use_container_width=True, type="primary")
                 if submitted:
-                    if not (adult and acknowledged and transferred):
-                        st.error(
-                            "Please read the privacy information and confirm all "
-                            "three eligibility and consent statements."
-                        )
-                    elif new_password != confirm_password:
-                        st.error("Passwords do not match.")
+                    if not username or not password:
+                        st.error("Please enter both username and password")
+                        return
+                    user = authenticate(username, password)
+                    if user:
+                        st.session_state.authenticated = True
+                        st.session_state.logged_in = True
+                        st.session_state.user_id = user[0]
+                        st.session_state.username = user[1]
+                        st.session_state.full_name = user[2]
+                        st.session_state.role = user[3]
+                        state = member_auth_state(DB_PATH, user[0])
+                        st.session_state._auth_epoch = state[3]
+                        st.session_state.theme = user[4] or "dark"
+                        st.session_state.nav_page = "dashboard"
+                        st.session_state._last_activity_monotonic = time.monotonic()
+                        st.success(f"Welcome back, {user[2]}!")
+                        st.rerun()
                     else:
-                        try:
-                            st.session_state.pop("_khula_last_receipt", None)
-                            if invite.strip():
-                                result = register_member(
-                                    DB_PATH, new_user, new_name, new_email,
-                                    new_password, invite,
-                                    notice_acknowledged=acknowledged,
-                                    international_transfer_acknowledged=transferred,
-                                    adult_confirmed=adult,
-                                    include_receipt=True,
+                        st.error("Sign-in failed. Check your credentials, or ask the administrator whether your membership is approved.")
+
+            st.link_button(
+                "📲 Add Khula to your phone",
+                "/app/static/install.html",
+                use_container_width=True,
+                type="secondary",
+            )
+            st.caption("Installing the app does not approve or create a member account.")
+
+        with st.container(border=True):
+            st.subheader("New to Khula? Apply for membership")
+            st.caption(
+                "Anyone may request an account when enrolment is open. "
+                "Only the club's administrator can approve access to member records "
+                "and financial features. Signing up does not automatically make you a member."
+            )
+            render_public_notice()
+
+            if not public_registration_enabled():
+                if registration_enabled():
+                    st.info(
+                        "Public applications are temporarily paused by the club administrator. "
+                        "Existing approved members can still sign in."
+                    )
+                else:
+                    st.info(
+                        "New requests are temporarily closed until Khula's privacy notice, "
+                        "club governance and overseas-hosting safeguards have been formally "
+                        "reviewed. No personal registration data is collected while closed."
+                    )
+            else:
+                with st.expander("Apply for access — invitation code optional", expanded=True):
+                    with st.form("member_registration"):
+                        new_user = st.text_input(
+                            "Choose username", key="join_username",
+                            help="Letters, digits and underscore; first character a letter."
+                        )
+                        new_name = st.text_input(
+                            "Full name", key="join_name"
+                        )
+                        new_email = st.text_input(
+                            "Your email address", key="join_email",
+                            help="The administrator must verify that you control this email address before approval."
+                        )
+                        new_password = st.text_input(
+                            "Create password (12–72 UTF-8 bytes)",
+                            type="password", key="join_password"
+                        )
+                        confirm_password = st.text_input(
+                            "Confirm password", type="password", key="join_password_confirmation"
+                        )
+                        invite = st.text_input(
+                            "Invitation code (leave blank to request membership)",
+                            type="password", key="join_invitation"
+                        )
+                        adult = st.checkbox(
+                            "I confirm I am at least 18 years old and am applying for myself.",
+                            key="join_adult"
+                        )
+                        acknowledged = st.checkbox(
+                            "I have read the Khula privacy notice and understand the "
+                            "purpose of my registration details and administrator review.",
+                            key="join_privacy"
+                        )
+                        transferred = st.checkbox(
+                            "I acknowledge and expressly consent to the transfer "
+                            "of my registration details to the overseas Railway hosting region "
+                            "identified in the privacy notice.",
+                            key="join_overseas"
+                        )
+                        st.caption(
+                            "Applications are private. No contribution is due for registration; "
+                            "do not send bank account details, identity images, PINs or OTPs."
+                        )
+                        submitted = st.form_submit_button("Submit membership request")
+                        if submitted:
+                            if not (adult and acknowledged and transferred):
+                                st.error(
+                                    "Please read the privacy information and confirm all "
+                                    "three eligibility and consent statements."
                                 )
+                            elif new_password != confirm_password:
+                                st.error("Passwords do not match.")
                             else:
-                                result = request_membership(
-                                    DB_PATH, new_user, new_name, new_email,
-                                    new_password,
-                                    notice_acknowledged=acknowledged,
-                                    international_transfer_acknowledged=transferred,
-                                    adult_confirmed=adult,
-                                    include_receipt=True,
-                                )
-                            if isinstance(result, dict):
-                                st.session_state["_khula_last_receipt"] = result["tracking_code"]
-                            st.success(
-                                "Your request was recorded, but you CANNOT sign in yet. "
-                                "An active club administrator must independently verify "
-                                "and approve your membership. "
-                                "No automatic email has been sent."
-                            )
-                        except (ValueError, PermissionError) as exc:
-                            st.error(str(exc))
+                                try:
+                                    st.session_state.pop("_khula_last_receipt", None)
+                                    if invite.strip():
+                                        result = register_member(
+                                            DB_PATH, new_user, new_name, new_email,
+                                            new_password, invite,
+                                            notice_acknowledged=acknowledged,
+                                            international_transfer_acknowledged=transferred,
+                                            adult_confirmed=adult,
+                                            include_receipt=True,
+                                        )
+                                    else:
+                                        result = request_membership(
+                                            DB_PATH, new_user, new_name, new_email,
+                                            new_password,
+                                            notice_acknowledged=acknowledged,
+                                            international_transfer_acknowledged=transferred,
+                                            adult_confirmed=adult,
+                                            include_receipt=True,
+                                        )
+                                    if isinstance(result, dict):
+                                        st.session_state["_khula_last_receipt"] = result["tracking_code"]
+                                    st.success(
+                                        "Your request was recorded, but you CANNOT sign in yet. "
+                                        "An active club administrator must independently verify "
+                                        "and approve your membership. "
+                                        "No automatic email has been sent."
+                                    )
+                                except (ValueError, PermissionError) as exc:
+                                    st.error(str(exc))
 
-    tracking = st.session_state.get("_khula_last_receipt")
-    if tracking:
-        st.success("Save your private membership tracking code now. It is displayed only in this browser session.")
-        st.code(tracking, language=None)
+        tracking = st.session_state.get("_khula_last_receipt")
+        if tracking:
+            st.success("Save your private membership tracking code now. It is displayed only in this browser session.")
+            st.code(tracking, language=None)
+            st.caption(
+                "Use the code in 'Check your membership status' below. "
+                "Never share it in a group. The code lasts up to 45 days."
+            )
+            if st.button("Hide the tracking code"):
+                st.session_state.pop("_khula_last_receipt", None)
+                st.rerun()
+
+        render_receipt_lookup()
+        render_member_recovery()
+        with st.expander("🇿🇦 Explore sourced South African economic data"):
+            from khula_sarb import render_sarb_panel
+            render_sarb_panel(expanded=False)
         st.caption(
-            "Use the code in 'Check your membership status' below. "
-            "Never share it in a group. The code lasts up to 45 days."
+            "Khula Collective · Only approved members may access private records · "
+            "No live bank account connection is claimed."
         )
-        if st.button("Hide the tracking code"):
-            st.session_state.pop("_khula_last_receipt", None)
-            st.rerun()
 
-    st.markdown("""
-        </div>
-        <div class='demo-box'>
-            Anyone may apply when enrolment is open. Only approved accounts can sign in.
-        </div>
-        <div class='powered-by'>Collective savings &middot; Member governance &middot; Source-labelled research</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-
-    render_receipt_lookup()
-    render_member_recovery()
 
 def render_dashboard():
     """Main dashboard with portfolio overview, market data, and quick actions."""

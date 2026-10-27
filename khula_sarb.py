@@ -137,3 +137,5 @@ def render_sarb_page():
         "and personalised investment decisions."
     )
     render_sarb_panel()
+    from khula_public_markets import render_current_market_rates
+    render_current_market_rates()

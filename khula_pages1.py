@@ -145,7 +145,7 @@ def render_dashboard():
 
     # Club bank balances are sourced separately from investment holdings
     # and ledger entries. Never add them together as "available savings".
-    snapshot = latest_club_balance()
+    snapshot = latest_club_balance(DB_PATH)
     if snapshot and bank_snapshot_fresh(snapshot["as_of"]):
         snapshot_balance_label = f"R{snapshot['available']:,.0f}"
         bank_label = f"Manual bank snapshot: {snapshot['as_of']}"

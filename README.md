@@ -105,6 +105,32 @@ penetration, operational and compliance acceptance testing.
 - The app does not initiate a bank transfer, send investment orders, or send
   automated WhatsApp reminders.
 
+## October 27, 2026: first-member pilot improvements
+
+**Register → track → verify → approve → sign in** is now a visible,
+auditable member journey. After a genuine legal/privacy sign-off, new
+prospective adult members may request an account. Every public or
+invitation-based application is inactive until independently reviewed by an
+active club administrator via **Membership Approvals**.
+
+A successful signup presents a private status-tracking code (45-day expiry,
+digest-only storage). Visitors can check a non-identifying application status
+from the public login page without exposing member information. No
+transactional email service is assumed: approved/rejected email notices are
+prepared as private copyable drafts in the administrator queue.
+
+The protected **🚦 Launch Control** page reports current member/application
+counts, missing POPIA/legal settings, SQLite quick-check results, the
+manual-bank-snapshot freshness and **unverified** backup state. This page
+cannot enable approvals or claim that FNB is connected.
+
+The production compliance gate remains intentionally **fail closed** until
+the responsible party provides genuine reviews and ratified documents.
+Railway volume-backup creation/restoration must be verified externally.
+
+Read the complete [real-member pilot runbook](docs/REAL_MEMBER_PILOT_RUNBOOK.md)
+before sharing the signup flow beyond the club committee.
+
 ## October 27, 2026: public membership applications & Khula Compass
 
 Visitors can **request a membership account without an invitation code** when

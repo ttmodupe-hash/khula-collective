@@ -12,6 +12,7 @@ from datetime import datetime, timezone, timedelta
 
 import bcrypt
 from khula_invitations import email_normalised, verify_and_use_invitation
+from khula_compliance import onboarding_gate_status, record_notice_acknowledgement
 
 
 def _is_demo_mode():
@@ -142,8 +143,11 @@ def bootstrap_admin(db_path):
 
 
 def registration_enabled():
-    # Real registration requires a unique, admin-issued invitation.
-    return not _is_demo_mode()
+    # Don't collect identifiable real-member data until minimum POPIA,
+    # operator and member-governance prerequisites are signed off.
+    if _is_demo_mode():
+        return False
+    return os.environ.get("KHULA_PRODUCTION") != "1" or onboarding_gate_status()["ready"]
 
 
 def member_auth_state(db_path, user_id):
@@ -179,12 +183,17 @@ def change_member_password(db_path, user_id, current_password, next_password):
     return True
 
 
-def register_member(db_path, username, full_name, email, password, invite_code):
+def register_member(db_path, username, full_name, email, password, invite_code, *, notice_acknowledged=False):
     """Create an inactive member using an individually issued one-time token.
 
     The token and the account creation share the same SQLite transaction,
     preventing simultaneous redemption or uninvited registration.
     """
+    if os.environ.get("KHULA_PRODUCTION") == "1":
+        if not onboarding_gate_status()["ready"]:
+            raise ValueError("Real-member registration awaits the privacy and governance review.")
+        if notice_acknowledged is not True:
+            raise ValueError("Read and acknowledge the published Khula privacy notice.")
     username = str(username).strip().lower()
     full_name = str(full_name).strip()
     email = email_normalised(email)
@@ -208,4 +217,6 @@ def register_member(db_path, username, full_name, email, password, invite_code):
         except sqlite3.IntegrityError as exc:
             raise ValueError("That username is already in use.") from exc
         verify_and_use_invitation(conn, email, invite_code, cursor.lastrowid)
+        if os.environ.get("KHULA_PRODUCTION") == "1":
+            record_notice_acknowledgement(conn, cursor.lastrowid)
         return cursor.lastrowid

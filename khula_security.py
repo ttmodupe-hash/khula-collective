@@ -183,7 +183,10 @@ def change_member_password(db_path, user_id, current_password, next_password):
     return True
 
 
-def register_member(db_path, username, full_name, email, password, invite_code, *, notice_acknowledged=False):
+def register_member(
+        db_path, username, full_name, email, password, invite_code, *,
+        notice_acknowledged=False, international_transfer_acknowledged=False,
+        adult_confirmed=False, include_receipt=False):
     """Create an inactive member using an individually issued one-time token.
 
     The token and the account creation share the same SQLite transaction,
@@ -194,6 +197,10 @@ def register_member(db_path, username, full_name, email, password, invite_code, 
             raise ValueError("Real-member registration awaits the privacy and governance review.")
         if notice_acknowledged is not True:
             raise ValueError("Read and acknowledge the published Khula privacy notice.")
+        if international_transfer_acknowledged is not True:
+            raise ValueError("You must acknowledge the disclosed overseas data transfer.")
+        if adult_confirmed is not True:
+            raise ValueError("Club registration is for adults applying for themselves.")
     username = str(username).strip().lower()
     full_name = str(full_name).strip()
     email = email_normalised(email)
@@ -219,4 +226,20 @@ def register_member(db_path, username, full_name, email, password, invite_code, 
         verify_and_use_invitation(conn, email, invite_code, cursor.lastrowid)
         if running_live():
             record_notice_acknowledgement(conn, cursor.lastrowid)
+            # Even an email-bound invitation does NOT grant club access.
+            # Use the exact same audited human-admission queue as public signups.
+            from khula_applications import ensure_applications_schema
+            from khula_membership_receipts import issue_status_receipt
+            ensure_applications_schema(conn)
+            now = datetime.now(timezone.utc).isoformat()
+            notice_version = onboarding_gate_status()["details"]["version"]
+            application = conn.execute(
+                "INSERT INTO Membership_Applications "
+                "(user_id,source,status,submitted_at,cross_border_consent_at,notice_version) "
+                "VALUES (?,'invitation','pending',?,?,?)",
+                (cursor.lastrowid, now, now, notice_version),
+            )
+            if include_receipt is True:
+                code = issue_status_receipt(conn, application.lastrowid)
+                return {"user_id": cursor.lastrowid, "tracking_code": code}
         return cursor.lastrowid

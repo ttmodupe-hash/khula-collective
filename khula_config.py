@@ -14,7 +14,9 @@ import matplotlib.pyplot as plt
 # ============================================================
 # CONFIGURATION
 # ============================================================
-DB_PATH = "khula_collective.db"
+# Use a mounted volume (for example /data/khula_collective.db) in production.
+# Railway's container filesystem is ephemeral without an attached volume.
+DB_PATH = os.environ.get("KHULA_DB_PATH", "khula_collective.db")
 
 # FNB Open Banking API Configuration
 FNB_API_BASE = os.environ.get("FNB_API_BASE", "https://api.fnb.co.za/openbanking/v1")
@@ -38,17 +40,21 @@ INVESTMENT_TYPES = [
 MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
 
 APP_FEATURES = [
+    {"id": "mentor", "name": "Khula Mentor", "icon": "🌱", "description": "Your private financial learning journey, knowledge checks and investment practice lab", "category": "Learning", "new": True, "premium": False},
     {"id": "dashboard", "name": "Dashboard", "icon": "🏠", "description": "Overview of club wealth and portfolio", "category": "Core", "new": False, "premium": False},
-    {"id": "payment_tracking", "name": "Payment Tracking", "icon": "💰", "description": "Track contributions and arrears", "category": "Core", "new": False, "premium": False},
-    {"id": "fnb_sync", "name": "FNB Bank Sync", "icon": "🏦", "description": "Automatic FNB transaction sync + statement upload", "category": "Banking", "new": True, "premium": False},
-    {"id": "feature_discovery", "name": "Feature Discovery", "icon": "✨", "description": "Explore all app features", "category": "Core", "new": True, "premium": False},
-    {"id": "member_voice", "name": "Member Voice", "icon": "🗳️", "description": "Vote on investment proposals", "category": "Governance", "new": False, "premium": False},
-    {"id": "ai_advisor", "name": "AI Advisor", "icon": "🤖", "description": "Smart investment insights for JSE", "category": "Analytics", "new": True, "premium": True},
+    {"id": "payments", "name": "Payment Tracking", "icon": "💰", "description": "Track contributions and arrears", "category": "Core", "new": False, "premium": False},
+    {"id": "fnb_sync", "name": "FNB Bank Sync", "icon": "🏦", "description": "FNB PDF/CSV statement upload; live API requires approval", "category": "Banking", "new": True, "premium": False},
+    {"id": "features", "name": "Feature Discovery", "icon": "✨", "description": "Explore all app features", "category": "Core", "new": True, "premium": False},
+    {"id": "voice", "name": "Member Voice", "icon": "🗳️", "description": "Vote on investment proposals", "category": "Governance", "new": False, "premium": False},
+    {"id": "ai_advisor", "name": "AI Advisor", "icon": "🤖", "description": "Explainable savings-based research with optional licensed quotes", "category": "Analytics", "new": True, "premium": False},
     {"id": "constitution", "name": "Constitution", "icon": "📜", "description": "Club rules and governance", "category": "Governance", "new": False, "premium": False},
     {"id": "directory", "name": "Member Directory", "icon": "👥", "description": "Contact info and FICA status", "category": "Core", "new": False, "premium": False},
     {"id": "notifications", "name": "Notifications", "icon": "🔔", "description": "Alerts and updates", "category": "Core", "new": False, "premium": False},
     {"id": "reports", "name": "Reports", "icon": "📈", "description": "Detailed analytics and exports", "category": "Analytics", "new": False, "premium": True},
     {"id": "whatsapp", "name": "WhatsApp", "icon": "💬", "description": "Group chat integration", "category": "Communication", "new": True, "premium": False},
+    {"id": "leaderboard", "name": "Hall of Fame", "icon": "🏆", "description": "Opt-in member savings recognition", "category": "Community", "new": True, "premium": False},
+    {"id": "economy", "name": "SA Economy", "icon": "🇿🇦", "description": "Real dated SARB rates and inflation", "category": "Analytics", "new": True, "premium": False},
+    {"id": "goals", "name": "Savings Goals", "icon": "🎯", "description": "Club savings milestones with transparent cash source", "category": "Community", "new": True, "premium": False},
     {"id": "profile", "name": "Profile", "icon": "👤", "description": "Manage your account", "category": "Core", "new": False, "premium": False},
     {"id": "admin", "name": "Admin Panel", "icon": "👑", "description": "Manage members and settings", "category": "Admin", "new": False, "premium": False},
 ]
@@ -155,6 +161,9 @@ SA_ID_RULES = {
 # ============================================================
 
 def init_database():
+    # Safe on existing databases: CREATE IF NOT EXISTS does not overwrite data.
+    database_dir = os.path.dirname(os.path.abspath(DB_PATH))
+    os.makedirs(database_dir, exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
 
@@ -166,7 +175,7 @@ def init_database():
         email TEXT,
         phone TEXT,
         id_number TEXT,
-        monthly_contribution REAL DEFAULT 500,
+        monthly_contribution REAL DEFAULT 0,
         join_date TEXT,
         role TEXT DEFAULT 'member',
         is_active INTEGER DEFAULT 1,
@@ -174,8 +183,20 @@ def init_database():
         theme_preference TEXT DEFAULT 'dark',
         risk_profile TEXT DEFAULT 'moderate',
         last_login TEXT,
-        notification_prefs TEXT DEFAULT 'all'
+        notification_prefs TEXT DEFAULT 'all',
+        leaderboard_opt_in INTEGER NOT NULL DEFAULT 0,
+        auth_epoch INTEGER NOT NULL DEFAULT 0,
+        must_change_password INTEGER NOT NULL DEFAULT 0
     )''')
+
+    # Privacy-preserving opt-in leaderboard column for existing databases.
+    columns = {row[1] for row in c.execute("PRAGMA table_info(Users)").fetchall()}
+    if "leaderboard_opt_in" not in columns:
+        c.execute("ALTER TABLE Users ADD COLUMN leaderboard_opt_in INTEGER NOT NULL DEFAULT 0")
+    if "auth_epoch" not in columns:
+        c.execute("ALTER TABLE Users ADD COLUMN auth_epoch INTEGER NOT NULL DEFAULT 0")
+    if "must_change_password" not in columns:
+        c.execute("ALTER TABLE Users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0")
 
     c.execute('''CREATE TABLE IF NOT EXISTS Monthly_Contributions (
         contribution_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -326,25 +347,87 @@ def init_database():
         updated_at TEXT
     )''')
 
-    # Seed demo users
-    demo_users = [
-        ("admin", hashlib.sha256("admin123".encode()).hexdigest(), "Admin User", "admin", "moderate"),
-        ("siphoo", hashlib.sha256("password1".encode()).hexdigest(), "Sipho Mabena", "member", "moderate"),
-    ]
-    for username, pw_hash, full_name, role, risk in demo_users:
-        c.execute("INSERT OR IGNORE INTO Users (username, password_hash, full_name, role, risk_profile, join_date, is_active) VALUES (?,?,?,?,?,?,1)",
-                  (username, pw_hash, full_name, role, risk, datetime.now().isoformat()))
+    # Historical capabilities from the earlier Khula repository. The tables
+    # are additive; financial balances are never inferred from seed/demo data.
+    c.execute("""CREATE TABLE IF NOT EXISTS Constitution_Signatures (
+        signature_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        constitution_version TEXT NOT NULL,
+        document_sha256 TEXT NOT NULL,
+        full_name_at_signature TEXT NOT NULL,
+        signed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, constitution_version),
+        FOREIGN KEY(user_id) REFERENCES Users(user_id)
+    )""")
+    c.execute("""CREATE TABLE IF NOT EXISTS Payment_Claims (
+        claim_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        year INTEGER NOT NULL,
+        month INTEGER NOT NULL,
+        amount_zar REAL NOT NULL CHECK(amount_zar > 0),
+        method TEXT NOT NULL,
+        payment_reference TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        submitted_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        reviewed_by INTEGER,
+        reviewed_at TEXT,
+        FOREIGN KEY(user_id) REFERENCES Users(user_id)
+    )""")
+    c.execute("CREATE INDEX IF NOT EXISTS idx_claim_status ON Payment_Claims(status, submitted_at)")
 
-    # Seed sample investments
-    sample_investments = [
-        ("JSE Top 40 Tracker", "Unit Trusts", 15000, 16200, "2024-01-15", None, 8.0, 1200, "active", "low"),
-        ("SASOL Resources Basket", "SASOL / Resources", 5000, 4850, "2024-03-01", None, None, -150, "active", "high"),
-        ("Growthpoint REIT", "REITs (Property)", 8000, 8200, "2024-02-10", None, 6.5, 200, "active", "medium"),
-        ("SARB Retail Savings Bond", "SARB Retail Savings Bonds", 10000, 10500, "2024-01-01", "2027-01-01", 10.0, 500, "active", "low"),
-    ]
-    for name, itype, invested, current, purchase, maturity, rate, ret, status, risk in sample_investments:
-        c.execute("INSERT OR IGNORE INTO Investments (name, type, amount_invested, current_value, purchase_date, maturity_date, interest_rate, returns, status, risk_level) VALUES (?,?,?,?,?,?,?,?,?,?)",
-                  (name, itype, invested, current, purchase, maturity, rate, ret, status, risk))
+    c.execute("""CREATE TABLE IF NOT EXISTS Club_Balance_Snapshots (
+        snapshot_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        balance_zar REAL NOT NULL CHECK(balance_zar >= 0),
+        reserved_zar REAL NOT NULL CHECK(reserved_zar >= 0),
+        statement_date TEXT NOT NULL,
+        reference TEXT NOT NULL,
+        source TEXT NOT NULL DEFAULT 'manual_admin',
+        attested_by INTEGER NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(attested_by) REFERENCES Users(user_id)
+    )""")
+    c.execute("""CREATE TABLE IF NOT EXISTS Savings_Goals (
+        goal_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        target_zar REAL NOT NULL CHECK(target_zar > 0),
+        target_date TEXT,
+        created_by INTEGER NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(created_by) REFERENCES Users(user_id)
+    )""")
+    c.execute("""CREATE TABLE IF NOT EXISTS Admin_Actions (
+        action_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        admin_user_id INTEGER NOT NULL,
+        action_type TEXT NOT NULL,
+        details TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )""")
+
+    # Demo accounts/holdings are NEVER created in production by default.
+    # Existing data is preserved for review; known demo credentials are
+    # separately denied by authentication outside demo mode.
+    if os.environ.get("KHULA_DEMO_MODE") == "1":
+        demo_users = [
+            ("admin", hashlib.sha256("admin123".encode()).hexdigest(), "Admin User", "admin", "moderate"),
+            ("siphoo", hashlib.sha256("password1".encode()).hexdigest(), "Sipho Mabena", "member", "moderate"),
+        ]
+        for username, pw_hash, full_name, role, risk in demo_users:
+            c.execute(
+                "INSERT OR IGNORE INTO Users (username,password_hash,full_name,role,risk_profile,join_date,is_active) VALUES (?,?,?,?,?,?,1)",
+                (username, pw_hash, full_name, role, risk, datetime.now().isoformat())
+            )
+        c.execute("SELECT COUNT(*) FROM Investments")
+        if c.fetchone()[0] == 0:
+            demo_investments = [
+                ("JSE Top 40 Tracker", "Unit Trusts", 15000, 16200, "2024-01-15", None, 8.0, 1200, "active", "low"),
+                ("SASOL Resources Basket", "SASOL / Resources", 5000, 4850, "2024-03-01", None, None, -150, "active", "high"),
+                ("Growthpoint REIT", "REITs (Property)", 8000, 8200, "2024-02-10", None, 6.5, 200, "active", "medium"),
+                ("SARB Retail Savings Bond", "SARB Retail Savings Bonds", 10000, 10500, "2024-01-01", "2027-01-01", 10.0, 500, "active", "low"),
+            ]
+            c.executemany(
+                "INSERT INTO Investments (name,type,amount_invested,current_value,purchase_date,maturity_date,interest_rate,returns,status,risk_level) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                demo_investments
+            )
 
     conn.commit()
     conn.close()

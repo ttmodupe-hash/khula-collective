@@ -1,3 +1,12 @@
+from khula_recovery import render_member_recovery
+from html import escape
+from khula_member_services import submit_payment_claim, latest_club_balance
+from khula_security import register_member, registration_enabled, member_auth_state
+from khula_applications import request_membership, public_registration_enabled
+from khula_membership_receipts import render_receipt_lookup
+from khula_owner_access import render_owner_setup
+from khula_compliance import render_public_notice, onboarding_gate_status
+from khula_advisory_core import bank_snapshot_fresh
 from khula_config import *
 from khula_utils import *
 import hashlib
@@ -10,80 +19,245 @@ from datetime import datetime, timedelta
 # ============================================================
 
 def render_login():
-    """Login page with centered branding."""
-    is_dark = st.session_state.get("theme", "dark") == "dark"
-    bg = "#0f0f23" if is_dark else "#f8f9fa"
-    card = "#1e1e30" if is_dark else "#ffffff"
-    text = "#ffffff" if is_dark else "#1a1a2e"
-    text_muted = "#a0a0b0" if is_dark else "#6c757d"
-    border = "#2a2a40" if is_dark else "#dee2e6"
-    accent = "#00b894"
+    """A responsive, properly contained public login and membership landing.
 
-    st.markdown(f"""
+    Use native Streamlit layout containers: ordinary HTML div wrappers
+    cannot contain Streamlit form widgets, and were causing the screenshot's
+    full-width form with an empty, narrow HTML-only brand panel.
+    """
+    st.markdown("""
     <style>
-    .stApp {{ background: {bg} !important; color: {text} !important; }}
-    .login-container {{ max-width: 420px; margin: 0 auto; padding: 2rem; }}
-    .login-logo {{ text-align: center; margin-bottom: 1.5rem; }}
-    .login-logo h1 {{ color: {accent}; font-weight: 800; font-size: 2.2rem; margin: 0; }}
-    .login-logo p {{ color: {text_muted}; font-size: 1rem; margin-top: 0.25rem; }}
-    .login-card {{ background: {card}; padding: 2rem; border-radius: 20px; border: 1px solid {border}; box-shadow: 0 8px 32px rgba(0,0,0,0.12); }}
-    .login-input {{ margin-bottom: 1rem; }}
-    .login-btn {{ width: 100%; background: linear-gradient(135deg, {accent}, #00cec9); color: white; border: none; padding: 0.85rem; border-radius: 12px; font-weight: 600; font-size: 1rem; cursor: pointer; }}
-    .login-btn:hover {{ opacity: 0.9; }}
-    .version-tag {{ text-align: center; color: {accent}; font-weight: 600; font-size: 0.9rem; margin-bottom: 1rem; }}
-    .demo-box {{ background: {card}; padding: 1rem; border-radius: 12px; border: 1px solid {border}; margin-top: 1.5rem; font-size: 0.85rem; color: {text_muted}; }}
-    .powered-by {{ text-align: center; color: {text_muted}; font-size: 0.8rem; margin-top: 2rem; }}
+      .stApp { background: #0d1022 !important; }
+      [data-testid="stMainBlockContainer"] {
+        padding-top: clamp(1.25rem, 4vh, 2.75rem);
+        padding-bottom: 2rem;
+      }
+      .khula-auth-hero { text-align: center; margin: 0 auto 1.2rem; max-width: 34rem; }
+      .khula-auth-hero img { display:block; width:72px; height:72px; margin:0 auto 1rem;
+        border-radius:20px; box-shadow:0 15px 36px rgba(0,0,0,.32); }
+      .khula-auth-hero h1 { margin:.25rem 0 .55rem; color:#f5fff7;
+        font-size:clamp(1.75rem,4.6vw,2.4rem); line-height:1.15; font-weight:800;
+        letter-spacing:-.04em; }
+      .khula-auth-hero .eyebrow { color:#6be0ad; letter-spacing:.13em;
+        font-size:.72rem; font-weight:800; text-transform:uppercase; }
+      .khula-auth-hero p { margin:.3rem auto; color:#afc8bd;
+        font-size:.98rem; line-height:1.5; max-width:33ch; }
+      .khula-login-steps { display:flex; flex-wrap:wrap; justify-content:center;
+        gap:.4rem; margin:.9rem auto 1.25rem; }
+      .khula-login-steps span { padding:.38rem .65rem; border:1px solid #285945;
+        border-radius:99px; background:#18382c; color:#c1ecd0; font-size:.75rem; }
+      @media (max-width:640px) {
+        [data-testid="stMainBlockContainer"] {padding-left:1rem;padding-right:1rem;}
+        .khula-auth-hero img {width:60px;height:60px;}
+        .khula-auth-hero {margin-bottom:.7rem;}
+      }
     </style>
     """, unsafe_allow_html=True)
 
-    st.markdown("""
-    <div class='login-container'>
-        <div class='login-logo'>
-            <h1>📈 Khula Collective</h1>
-            <p>Empowering South African stokvels &amp; investment clubs</p>
+    # Center actual Streamlit widgets, not a raw HTML wrapper.
+    _, main_col, _ = st.columns([1, 2.2, 1], gap="large")
+    with main_col:
+        st.markdown("""
+        <header class="khula-auth-hero">
+          <img src="/app/static/khula-icon-192.png" alt="Khula Collective icon">
+          <div class="eyebrow">Members · Savings · Shared decisions</div>
+          <h1>Khula Collective</h1>
+          <p>A private home for collective savings, transparent records
+          and better financial decisions.</p>
+        </header>
+        <div class="khula-login-steps">
+          <span>1. Request access</span>
+          <span>2. Club approval</span>
+          <span>3. Secure sign-in</span>
         </div>
-        <div class='version-tag'>v4.0 &middot; Super Live Model</div>
-        <div class='login-card'>
-    """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
 
-    with st.form("login_form"):
-        username = st.text_input("Username", placeholder="Enter username")
-        password = st.text_input("Password", type="password", placeholder="Enter password")
-        submitted = st.form_submit_button("🔓 Sign In")
-        if submitted:
-            if not username or not password:
-                st.error("Please enter both username and password")
-                return
-            user = authenticate(username, password)
-            if user:
-                st.session_state.logged_in = True
-                st.session_state.user_id = user[0]
-                st.session_state.username = user[1]
-                st.session_state.full_name = user[2]
-                st.session_state.role = user[3]
-                st.session_state.theme = user[4] or "dark"
-                st.session_state.nav_page = "dashboard"
-                st.success(f"Welcome back, {user[2]}!")
-                time.sleep(1)
-                st.rerun()
+        owner_username = st.session_state.get("_khula_owner_setup_complete")
+        if owner_username:
+            st.success(
+                f"Your owner password is saved. Your username is: {owner_username}. "
+                "Sign in below with this username and your NEW password. "
+                "You can then approve requests under Membership Approvals."
+            )
+
+        # The private link leads with setup/recovery, before normal sign-in.
+        render_owner_setup()
+
+        with st.container(border=True):
+            st.subheader("Welcome back")
+            st.caption("Use your approved Khula member account.")
+            with st.form("login_form"):
+                username = st.text_input("Username or email", value=owner_username or "",
+                                         placeholder="Enter your username or account email")
+                password = st.text_input("Password", type="password", placeholder="Enter password")
+                submitted = st.form_submit_button("Sign in to Khula", use_container_width=True, type="primary")
+                if submitted:
+                    if not username or not password:
+                        st.error("Please enter both username and password")
+                        return
+                    user = authenticate(username, password)
+                    if user:
+                        st.session_state.pop("_khula_owner_setup_complete", None)
+                        st.session_state.authenticated = True
+                        st.session_state.logged_in = True
+                        st.session_state.user_id = user[0]
+                        st.session_state.username = user[1]
+                        st.session_state.full_name = user[2]
+                        st.session_state.role = user[3]
+                        state = member_auth_state(DB_PATH, user[0])
+                        st.session_state._auth_epoch = state[3]
+                        st.session_state.theme = user[4] or "dark"
+                        st.session_state.nav_page = "dashboard"
+                        st.session_state._last_activity_monotonic = time.monotonic()
+                        st.success(f"Welcome back, {user[2]}!")
+                        st.rerun()
+                    else:
+                        st.error("Sign-in failed. Check your username/email and password. After 8 failed attempts, wait 15 minutes or use owner recovery with a fresh code. Pending members cannot sign in.")
+
+            st.link_button("Owner login help / reset password", "/?owner_setup=1")
+            st.caption("If an email is shared by multiple accounts, use your unique username.")
+
+            st.link_button(
+                "📲 Add Khula to your phone",
+                "/app/static/install.html",
+                use_container_width=True,
+                type="secondary",
+            )
+            st.caption("Installing the app does not approve or create a member account.")
+
+        with st.container(border=True):
+            st.subheader("New to Khula? Apply for membership")
+            st.caption(
+                "Anyone may request an account when enrolment is open. "
+                "Only the club's administrator can approve access to member records "
+                "and financial features. Signing up does not automatically make you a member."
+            )
+            render_public_notice()
+
+            if not public_registration_enabled():
+                if registration_enabled():
+                    st.info(
+                        "Public applications are temporarily paused by the club administrator. "
+                        "Existing approved members can still sign in."
+                    )
+                else:
+                    st.info(
+                        "New requests are temporarily closed until Khula's privacy notice, "
+                        "club governance and overseas-hosting safeguards have been formally "
+                        "reviewed. No personal registration data is collected while closed."
+                    )
             else:
-                st.error("Invalid username or password")
+                with st.expander("Apply for access — invitation code optional", expanded=True):
+                    with st.form("member_registration"):
+                        new_user = st.text_input(
+                            "Choose username", key="join_username",
+                            help="Letters, digits and underscore; first character a letter."
+                        )
+                        new_name = st.text_input(
+                            "Full name", key="join_name"
+                        )
+                        new_email = st.text_input(
+                            "Your email address", key="join_email",
+                            help="The administrator must verify that you control this email address before approval."
+                        )
+                        new_password = st.text_input(
+                            "Create password (12–72 UTF-8 bytes)",
+                            type="password", key="join_password"
+                        )
+                        confirm_password = st.text_input(
+                            "Confirm password", type="password", key="join_password_confirmation"
+                        )
+                        invite = st.text_input(
+                            "Invitation code (leave blank to request membership)",
+                            type="password", key="join_invitation"
+                        )
+                        adult = st.checkbox(
+                            "I confirm I am at least 18 years old and am applying for myself.",
+                            key="join_adult"
+                        )
+                        acknowledged = st.checkbox(
+                            "I have read the Khula privacy notice and understand the "
+                            "purpose of my registration details and administrator review.",
+                            key="join_privacy"
+                        )
+                        transferred = st.checkbox(
+                            "I acknowledge and expressly consent to the transfer "
+                            "of my registration details to the overseas Railway hosting region "
+                            "identified in the privacy notice.",
+                            key="join_overseas"
+                        )
+                        st.caption(
+                            "Applications are private. No contribution is due for registration; "
+                            "do not send bank account details, identity images, PINs or OTPs."
+                        )
+                        submitted = st.form_submit_button("Submit membership request")
+                        if submitted:
+                            if not (adult and acknowledged and transferred):
+                                st.error(
+                                    "Please read the privacy information and confirm all "
+                                    "three eligibility and consent statements."
+                                )
+                            elif new_password != confirm_password:
+                                st.error("Passwords do not match.")
+                            else:
+                                try:
+                                    st.session_state.pop("_khula_last_receipt", None)
+                                    if invite.strip():
+                                        result = register_member(
+                                            DB_PATH, new_user, new_name, new_email,
+                                            new_password, invite,
+                                            notice_acknowledged=acknowledged,
+                                            international_transfer_acknowledged=transferred,
+                                            adult_confirmed=adult,
+                                            include_receipt=True,
+                                        )
+                                    else:
+                                        result = request_membership(
+                                            DB_PATH, new_user, new_name, new_email,
+                                            new_password,
+                                            notice_acknowledged=acknowledged,
+                                            international_transfer_acknowledged=transferred,
+                                            adult_confirmed=adult,
+                                            include_receipt=True,
+                                        )
+                                    if isinstance(result, dict):
+                                        st.session_state["_khula_last_receipt"] = result["tracking_code"]
+                                    st.success(
+                                        "Your request was recorded, but you CANNOT sign in yet. "
+                                        "An active club administrator must independently verify "
+                                        "and approve your membership. "
+                                        "No automatic email has been sent."
+                                    )
+                                except (ValueError, PermissionError) as exc:
+                                    st.error(str(exc))
 
-    st.markdown("""
-        </div>
-        <div class='demo-box'>
-            <strong>Demo Credentials</strong><br>
-            Admin: <code>admin</code> / <code>admin123</code><br>
-            Member: <code>siphoo</code> / <code>password1</code>
-        </div>
-        <div class='powered-by'>Powered by FNB Open Banking API &middot; Global Market Intelligence</div>
-    </div>
-    """, unsafe_allow_html=True)
+        tracking = st.session_state.get("_khula_last_receipt")
+        if tracking:
+            st.success("Save your private membership tracking code now. It is displayed only in this browser session.")
+            st.code(tracking, language=None)
+            st.caption(
+                "Use the code in 'Check your membership status' below. "
+                "Never share it in a group. The code lasts up to 45 days."
+            )
+            if st.button("Hide the tracking code"):
+                st.session_state.pop("_khula_last_receipt", None)
+                st.rerun()
+
+        render_receipt_lookup()
+        render_member_recovery()
+        with st.expander("🇿🇦 Explore sourced South African economic data"):
+            from khula_sarb import render_sarb_panel
+            render_sarb_panel(expanded=False)
+        st.caption(
+            "Khula Collective · Only approved members may access private records · "
+            "No live bank account connection is claimed."
+        )
+
 
 def render_dashboard():
     """Main dashboard with portfolio overview, market data, and quick actions."""
     track_feature_usage(st.session_state.user_id, "dashboard")
-    user_name = st.session_state.get("full_name", "Member")
+    user_name = escape(str(st.session_state.get("full_name", "Member")))
 
     st.markdown(f"""
     <div class='main-header'>
@@ -110,17 +284,27 @@ def render_dashboard():
     c.execute("SELECT COALESCE(SUM(amount), 0) FROM Monthly_Contributions WHERE year=? AND month=? AND status='paid'", (current_year, current_month))
     month_contrib = c.fetchone()[0] or 0
 
-    c.execute("SELECT COUNT(DISTINCT user_id) FROM Users WHERE is_active=1")
+    c.execute("SELECT COUNT(DISTINCT user_id) FROM Users WHERE is_active=1 AND role='member'")
     active_members = c.fetchone()[0] or 0
 
     conn.close()
+
+    # Club bank balances are sourced separately from investment holdings
+    # and ledger entries. Never add them together as "available savings".
+    snapshot = latest_club_balance(DB_PATH)
+    if snapshot and bank_snapshot_fresh(snapshot["as_of"]):
+        snapshot_balance_label = f"R{snapshot['available']:,.0f}"
+        bank_label = f"Manual bank snapshot: {snapshot['as_of']}"
+    else:
+        snapshot_balance_label = "Unverified"
+        bank_label = "No recent administrator-attested bank statement"
 
     # ── KPI Cards ───────────────────────────────────────────
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.markdown(f"""
         <div class='metric-card'>
-            <div class='metric-label'>Portfolio Value</div>
+            <div class='metric-label'>Recorded investment valuation</div>
             <div class='metric-value'>R{portfolio_value:,.0f}</div>
         </div>
         """, unsafe_allow_html=True)
@@ -129,35 +313,40 @@ def render_dashboard():
         delta_sign = "+" if total_returns >= 0 else ""
         st.markdown(f"""
         <div class='metric-card'>
-            <div class='metric-label'>Total Returns</div>
+            <div class='metric-label'>Recorded returns (not independently audited)</div>
             <div class='metric-value' style='color:{delta_color};'>{delta_sign}R{total_returns:,.0f}</div>
         </div>
         """, unsafe_allow_html=True)
     with col3:
         st.markdown(f"""
         <div class='metric-card'>
-            <div class='metric-label'>This Month</div>
+            <div class='metric-label'>Contributions marked paid this month</div>
             <div class='metric-value'>R{month_contrib:,.0f}</div>
         </div>
         """, unsafe_allow_html=True)
     with col4:
         st.markdown(f"""
         <div class='metric-card'>
-            <div class='metric-label'>Members</div>
+            <div class='metric-label'>Active club members (excluding admins)</div>
             <div class='metric-value'>{active_members}</div>
         </div>
         """, unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # ── News Ticker ─────────────────────────────────────────
-    news = random.choice(SA_NEWS_HEADLINES)
-    st.markdown(f"""
-    <div style='background:#1e1e30;padding:0.75rem 1rem;border-radius:12px;border-left:4px solid #00b894;margin-bottom:1rem;'>
-        <span style='color:#00b894;font-weight:600;font-size:0.8rem;'>LATEST</span>
-        <span style='color:#ffffff;font-size:0.9rem;margin-left:0.5rem;'>{news}</span>
-    </div>
-    """, unsafe_allow_html=True)
+    # ── Verified-source financial status ────────────────────
+    st.subheader("Club cash — not the same as investment valuations")
+    st.metric("Cash available after reserve (manual attestation)", snapshot_balance_label)
+    st.caption(bank_label + " · This is not a live bank API or an independent audit.")
+    st.warning(
+        "Contribution and investment figures are recorded ledger entries. "
+        "They must be reconciled with actual club bank and brokerage evidence."
+    )
+
+    # Never label hard-coded or synthetic headlines as latest news.
+    from khula_sarb import render_sarb_panel
+    with st.expander("🇿🇦 See independently sourced South African economic data"):
+        render_sarb_panel(expanded=False)
 
     # ── Portfolio Breakdown ─────────────────────────────────
     col_left, col_right = st.columns([2, 1])
@@ -179,8 +368,8 @@ def render_dashboard():
     with col_right:
         st.subheader("Quick Actions")
         actions = [
-            ("💰", "Make Contribution", "payment_tracking"),
-            ("🗳️", "Vote on Proposal", "member_voice"),
+            ("💰", "Review Contributions", "payments"),
+            ("🗳️", "Vote on Proposal", "voice"),
             ("🤖", "Ask AI Advisor", "ai_advisor"),
             ("🌍", "Global Markets", "global_markets"),
             ("🆔", "Verify ID", "id_verify"),
@@ -190,27 +379,8 @@ def render_dashboard():
                 st.session_state.nav_page = page
                 st.rerun()
 
-    # ── Market Snapshot ─────────────────────────────────────
-    st.subheader("SA Market Snapshot")
-    mcols = st.columns(5)
-    snapshot_items = [
-        ("JSE All Share", SA_MARKET_DATASET["jse_allshare"]),
-        ("USD/ZAR", SA_MARKET_DATASET["usd_zar"]),
-        ("Gold", SA_MARKET_DATASET["gold_price"]),
-        ("Brent Oil", SA_MARKET_DATASET["brent_oil"]),
-        ("SARB Rate", SA_MARKET_DATASET["sarb_rate"]),
-    ]
-    for col, (label, data) in zip(mcols, snapshot_items):
-        with col:
-            change_color = "#2ed573" if data["change"] >= 0 else "#ff4757"
-            change_sign = "+" if data["change"] >= 0 else ""
-            st.markdown(f"""
-            <div style='background:#1e1e30;padding:0.75rem;border-radius:12px;text-align:center;border:1px solid #2a2a40;'>
-                <div style='font-size:0.75rem;color:#a0a0b0;'>{label}</div>
-                <div style='font-size:1.1rem;font-weight:700;color:#ffffff;'>{data['value']:,.2f}</div>
-                <div style='font-size:0.75rem;color:{change_color};'>{change_sign}{data['change']}%</div>
-            </div>
-            """, unsafe_allow_html=True)
+    # Prices must come from a real provider, never seeded values.
+    st.info("Live market quotes appear in Global Markets when an authorised data provider is configured.")
 
 def render_fnb_sync():
     """FNB bank sync with statement upload."""
@@ -233,9 +403,7 @@ def render_fnb_sync():
     col1, col2 = st.columns(2)
     with col1:
         if st.button("Connect FNB Account", use_container_width=True, type="primary"):
-            st.info("FNB OAuth would open here in production. Simulating connection...")
-            time.sleep(1)
-            st.success("Simulated FNB connection successful!")
+            st.warning("Live FNB bank connection is not enabled. Use PDF/CSV statement import for review; it is not equivalent to a verified bank feed.")
     with col2:
         if st.button("Test API Connection", use_container_width=True):
             client = FNBAPIClient()
@@ -295,441 +463,86 @@ def render_fnb_sync():
         st.info("Upload a bank statement to see your financial snapshot.")
 
 def render_payment_progress():
-    """Payment tracking with detailed progress per member."""
+    """Member claims are pending until a real receipt/bank entry is reviewed."""
     track_feature_usage(st.session_state.user_id, "payment_tracking")
-    st.markdown("""
-    <div class='main-header'>
-        <h1>💰 Payment Tracking</h1>
-        <p>Track contributions and manage arrears</p>
-    </div>
-    """, unsafe_allow_html=True)
+    st.title("💰 Contributions and Savings")
+    st.warning("Recorded contribution totals are ledger entries, not live FNB balances. Historical entries made before the approval workflow require reconciliation.")
+    now = datetime.now()
+    with sqlite3.connect(DB_PATH) as conn:
+        members = conn.execute(
+            "SELECT user_id,full_name,COALESCE(monthly_contribution,0) "
+            "FROM Users WHERE is_active=1 AND role='member' ORDER BY full_name"
+        ).fetchall()
+        recorded = conn.execute(
+            "SELECT user_id,COALESCE(SUM(amount),0) "
+            "FROM Monthly_Contributions WHERE year=? AND month=? AND status='paid' "
+            "GROUP BY user_id",
+            (now.year, now.month),
+        ).fetchall()
+        claims = conn.execute(
+            "SELECT claim_id,year,month,amount_zar,status,payment_reference "
+            "FROM Payment_Claims WHERE user_id=? ORDER BY submitted_at DESC LIMIT 15",
+            (st.session_state.user_id,),
+        ).fetchall()
+    amounts = dict(recorded)
+    expected = sum(max(0.0, target) for _, _, target in members)
+    collected = sum(max(0.0, amounts.get(uid, 0.0)) for uid, _, _ in members)
+    col_a, col_b = st.columns(2)
+    col_a.metric("Recorded club contributions this month", f"R{collected:,.2f}")
+    col_b.metric("Sum of member monthly targets", f"R{expected:,.2f}")
+    if expected:
+        st.progress(min(1.0, collected / expected))
+        st.caption("This is a contribution-tracking ratio, not verified bank cash.")
+    else:
+        st.info("No active member contribution targets are recorded.")
 
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
+    is_admin = st.session_state.get("role") == "admin"
+    st.subheader("Monthly member progress")
+    for uid, member_name, target in members:
+        if not is_admin and uid != st.session_state.user_id:
+            continue
+        paid = amounts.get(uid, 0.0)
+        shortfall = max(0.0, target - paid)
+        st.write(f"{member_name}: recorded R{paid:,.2f} / target R{target:,.2f}; remaining R{shortfall:,.2f}")
+        if target:
+            st.progress(min(1.0, paid / target))
 
-    current_year = datetime.now().year
-    current_month = datetime.now().month
+    if st.session_state.get("role") == "member":
+        st.subheader("Submit a contribution for verification")
+        st.caption("This form does NOT transfer money and cannot mark you as paid. The administrator must check the actual bank statement.")
+        with st.form("submit_payment_claim"):
+            amount = st.number_input("Amount deposited or paid (ZAR)", min_value=1.0, max_value=10000000.0, step=50.0)
+            method = st.selectbox("Payment method", ["EFT", "Cash", "Other"])
+            reference = st.text_input("Bank or receipt reference (no account numbers)")
+            if st.form_submit_button("Submit for review"):
+                try:
+                    submit_payment_claim(st.session_state.user_id, now.year, now.month, amount, method, reference)
+                    st.success("Payment claim submitted, pending bank/receipt review.")
+                    st.rerun()
+                except (ValueError, PermissionError) as exc:
+                    st.error(str(exc))
+        if claims:
+            st.subheader("My recent claims")
+            st.dataframe([
+                {"Period": f"{month}/{year}", "Amount": amount, "Status": status,
+                 "Reference": ref}
+                for _, year, month, amount, status, ref in claims
+            ], use_container_width=True)
+    elif is_admin:
+        st.info("Review claims in Admin Reconciliation; only an approved claim posts to the paid ledger.")
 
-    # Overall stats
-    c.execute("SELECT COUNT(*) FROM Users WHERE is_active=1")
-    total_members = c.fetchone()[0] or 1
-    c.execute("SELECT COUNT(*) FROM Monthly_Contributions WHERE year=? AND month=? AND status='paid'", (current_year, current_month))
-    paid_count = c.fetchone()[0] or 0
-    c.execute("SELECT COALESCE(SUM(amount), 0) FROM Monthly_Contributions WHERE year=? AND month=? AND status='paid'", (current_year, current_month))
-    total_collected = c.fetchone()[0] or 0
-
-    expected = total_members * 500
-    collection_rate = (total_collected / expected * 100) if expected > 0 else 0
-
-    st.markdown(f"""
-    <div style='display:flex;gap:1rem;margin-bottom:1.5rem;'>
-        <div class='metric-card' style='flex:1;'><div class='metric-label'>Collection Rate</div><div class='metric-value'>{collection_rate:.1f}%</div></div>
-        <div class='metric-card' style='flex:1;'><div class='metric-label'>Paid / Total</div><div class='metric-value'>{paid_count}/{total_members}</div></div>
-        <div class='metric-card' style='flex:1;'><div class='metric-label'>Total Collected</div><div class='metric-value'>R{total_collected:,.0f}</div></div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # Progress bar
-    st.markdown(f"""
-    <div class='progress-container'>
-        <div class='progress-bar {"success" if collection_rate >= 80 else "warning"}' style='width:{collection_rate}%;'></div>
-    </div>
-    <p style='text-align:center;font-size:0.8rem;color:#a0a0b0;margin-top:0.25rem;'>{collection_rate:.1f}% of monthly target reached</p>
-    """, unsafe_allow_html=True)
-
-    # Member breakdown
-    st.subheader("Member Contributions")
-    c.execute("SELECT user_id, full_name, monthly_contribution FROM Users WHERE is_active=1 ORDER BY full_name")
-    members = c.fetchall()
-
-    for uid, name, target in members:
-        c.execute("SELECT amount, status FROM Monthly_Contributions WHERE user_id=? AND year=? AND month=?", (uid, current_year, current_month))
-        row = c.fetchone()
-        paid = row[0] if row else 0
-        status = row[1] if row else "pending"
-        pct = (paid / target * 100) if target and target > 0 else 0
-
-        status_class = "success" if status == "paid" else "warning" if status == "partial" else ""
-        status_label = status.upper()
-        bar_class = "success" if pct >= 100 else "warning" if pct >= 50 else ""
-
-        with st.container():
-            st.markdown(f"""
-            <div class='arrears-card {status_class}'>
-                <div style='display:flex;justify-content:space-between;align-items:center;'>
-                    <span style='font-weight:600;'>{name}</span>
-                    <span class='payment-status {"status-paid" if status=="paid" else "status-partial" if status=="partial" else "status-late"}'>{status_label}</span>
-                </div>
-                <div style='font-size:0.85rem;color:#a0a0b0;margin-top:0.25rem;'>R{paid:,.0f} / R{target:,.0f}</div>
-                <div class='progress-container'><div class='progress-bar {bar_class}' style='width:{min(pct,100)}%;'></div></div>
-            </div>
-            """, unsafe_allow_html=True)
-
-            if st.session_state.user_id == uid and status != "paid":
-                with st.expander("Make Payment"):
-                    amt = st.number_input("Amount (R)", min_value=0.0, value=float(target - paid), step=50.0, key=f"pay_{uid}")
-                    method = st.selectbox("Method", ["EFT", "Cash", "FNB Instant Pay"], key=f"meth_{uid}")
-                    if st.button("Confirm Payment", key=f"btn_{uid}"):
-                        now = datetime.now().isoformat()
-                        if row:
-                            c.execute("UPDATE Monthly_Contributions SET amount=amount+?, status=?, payment_date=?, payment_method=? WHERE user_id=? AND year=? AND month=?",
-                                      (amt, "paid" if (paid + amt) >= target else "partial", now, method, uid, current_year, current_month))
-                        else:
-                            c.execute("INSERT INTO Monthly_Contributions (user_id, year, month, amount, status, payment_date, payment_method) VALUES (?,?,?,?,?,?,?)",
-                                      (uid, current_year, current_month, amt, "paid" if amt >= target else "partial", now, method))
-                        conn.commit()
-                        add_notification(uid, "Payment Recorded", f"R{amt:,.2f} recorded via {method}", "success")
-                        st.success("Payment recorded!")
-                        time.sleep(1)
-                        st.rerun()
-
-    conn.close()
 
 # ── Global Markets Helpers ──────────────────────────────────
 
-def _get_region_flag(region):
-    flags = {"SA": "🇿🇦", "US": "🇺🇸", "EU": "🇪🇺", "EM": "🌏", "Crypto": "₿", "Commodity": "🛢️"}
-    return flags.get(region, "🌐")
-
-def _get_region_name(region):
-    names = {"SA": "South Africa / JSE", "US": "United States", "EU": "Europe", "EM": "Emerging Markets", "Crypto": "Cryptocurrency", "Commodity": "Commodities"}
-    return names.get(region, region)
-
-def _risk_badge(risk):
-    colors = {"low": ("#2ed573", "Low"), "medium": ("#ffa502", "Medium"), "high": ("#ff4757", "High")}
-    color, label = colors.get(risk, ("#a0a0b0", risk.title()))
-    return f"<span style='display:inline-block;padding:0.15rem 0.5rem;border-radius:8px;font-size:0.7rem;font-weight:600;background:{color}22;color:{color};'>{label}</span>"
-
-def _actionable_badge(actionable):
-    colors = {"buy": ("#2ed573", "BUY"), "watch": ("#ffa502", "WATCH"), "hold": ("#00b894", "HOLD"), "avoid": ("#ff4757", "AVOID")}
-    color, label = colors.get(actionable, ("#a0a0b0", actionable.upper()))
-    return f"<span style='display:inline-block;padding:0.15rem 0.5rem;border-radius:8px;font-size:0.7rem;font-weight:600;background:{color}33;color:{color};'>{label}</span>"
-
-def _format_market_cap(cap):
-    if cap is None or cap == "N/A":
-        return "N/A"
-    try:
-        val = float(cap)
-        if val >= 1e12:
-            return f"${val/1e12:.2f}T"
-        elif val >= 1e9:
-            return f"${val/1e9:.2f}B"
-        elif val >= 1e6:
-            return f"${val/1e6:.2f}M"
-        else:
-            return f"${val:,.0f}"
-    except:
-        return str(cap)
-
-def _convert_to_zar(price_usd, region):
-    if region == "SA":
-        return price_usd
-    if price_usd is None or price_usd == "N/A":
-        return None
-    try:
-        return float(price_usd) * ZAR_RATES.get("USD", 18.5)
-    except:
-        return None
-
-def _get_mock_market_data(ticker_info):
-    """Generate realistic mock market data when live API fails."""
-    random.seed(hash(ticker_info["ticker"]) % 10000)
-    base_prices = {
-        "SHP.JO": 28500, "AGL.JO": 62000, "MTN.JO": 15200, "NPN.JO": 320000, "FSR.JO": 6800,
-        "STX40.JO": 6500, "AAPL": 185, "MSFT": 420, "GOOGL": 175, "AMZN": 185,
-        "TSLA": 245, "NVDA": 890, "JPM": 195, "BRK-B": 415, "VOO": 470,
-        "SAP.DE": 185, "ASML.AS": 890, "NESN.SW": 105, "LVMH.PA": 875, "AIR.PA": 155,
-        "EXS1.DE": 52, "0700.HK": 385, "BABA": 78, "TCEHY": 42,
-        "BTC-USD": 68500, "ETH-USD": 3550, "GC=F": 2350, "CL=F": 82,
-    }
-    base = base_prices.get(ticker_info["ticker"], 100)
-    # Add some randomness
-    price = base * (1 + random.uniform(-0.05, 0.05))
-    change_pct = random.uniform(-3.5, 3.5)
-    pe = random.uniform(12, 35) if ticker_info["category"] == "stock" else None
-    div_yield = random.uniform(1.5, 4.5) if ticker_info["category"] == "stock" else (random.uniform(0, 0.5) if ticker_info["category"] == "crypto" else None)
-    mcap = base * random.uniform(1e8, 5e9) if ticker_info["category"] != "commodity" else None
-    return {
-        "price_usd": round(price, 2),
-        "change_pct": round(change_pct, 2),
-        "pe_ratio": round(pe, 2) if pe else None,
-        "dividend_yield": round(div_yield, 2) if div_yield else None,
-        "market_cap": mcap,
-    }
-
-def _calculate_affordability_cards(price_zar, bank_balance):
-    """Return affordability stats for an asset."""
-    if not price_zar or price_zar <= 0:
-        return None
-    units = int((bank_balance * 0.8) / price_zar) if bank_balance else 0
-    total = units * price_zar
-    return {
-        "units_affordable": units,
-        "total_cost_zar": round(total, 2),
-        "percent_of_balance": round((total / bank_balance * 100), 1) if bank_balance else 0,
-    }
-
-def _group_by_region(assets):
-    groups = {}
-    for a in assets:
-        r = a.get("region", "Other")
-        groups.setdefault(r, []).append(a)
-    return groups
-
-# ── AI Advisor ──────────────────────────────────────────────
-
-def generate_ai_response(question, context):
-    """Generate contextual AI advisor response based on user data and SA market knowledge."""
-    q_lower = question.lower()
-    user_risk = context.get("risk_profile", "moderate")
-    portfolio = context.get("portfolio_value", 0)
-    statement = context.get("statement_summary", {})
-    monthly_target = context.get("monthly_target", 500)
-    this_month = context.get("this_month_contrib", 0)
-
-    # Default greeting
-    if any(w in q_lower for w in ["hello", "hi", "hey", "greetings"]):
-        return f"Hello {context.get('user_name', 'there')}! I'm your Khula Collective AI Advisor. Ask me about JSE stocks, investment strategies, or your portfolio."
-
-    # Contribution advice
-    if any(w in q_lower for w in ["contribution", "payment", "monthly", "arrears", "owed"]):
-        if this_month >= monthly_target:
-            return f"Great job! You've contributed R{this_month:,.2f} this month (target: R{monthly_target:,.2f}). You're fully paid up. 🎉"
-        else:
-            shortfall = monthly_target - this_month
-            return f"You're R{shortfall:,.2f} short of your R{monthly_target:,.2f} monthly target. Consider topping up before the 7th to avoid penalties."
-
-    # Portfolio advice
-    if any(w in q_lower for w in ["portfolio", "returns", "performance", "how am i doing", "wealth"]):
-        if portfolio > 0:
-            return f"Your club portfolio is valued at R{portfolio:,.2f}. Based on your {user_risk} risk profile, consider rebalancing quarterly. Would you like specific JSE stock picks?"
-        return "Your portfolio is just getting started! Once contributions flow in, I can recommend allocation strategies tailored to your risk profile."
-
-    # JSE / Stock picks
-    if any(w in q_lower for w in ["jse", "stock", "share", "pick", "buy", "invest", "anglo", "sasol", "naspers", "shoprite", "satrix"]):
-        picks = AI_ADVISOR_KNOWLEDGE["jse_sectors"]
-        if "resource" in q_lower or "mining" in q_lower or "anglo" in q_lower or "sibanye" in q_lower or "gold" in q_lower:
-            sector = picks["resources"]
-            return f"Resources outlook: {sector['outlook'].title()}. Key drivers: {', '.join(sector['drivers'])}. Top picks: {', '.join(sector['top_picks'])}. Risk: {sector['risk'].title()}."
-        if "bank" in q_lower or "financial" in q_lower or "firstrand" in q_lower or "standard" in q_lower:
-            sector = picks["financials"]
-            return f"Financials outlook: {sector['outlook'].title()}. Key drivers: {', '.join(sector['drivers'])}. Top picks: {', '.join(sector['top_picks'])}. Risk: {sector['risk'].title()}."
-        if "property" in q_lower or "reit" in q_lower or "growthpoint" in q_lower:
-            sector = picks["property"]
-            return f"Property outlook: {sector['outlook'].title()}. Key drivers: {', '.join(sector['drivers'])}. Top picks: {', '.join(sector['top_picks'])}. Risk: {sector['risk'].title()}."
-        if "tech" in q_lower or "naspers" in q_lower or "prosus" in q_lower or "tencent" in q_lower:
-            sector = picks["tech"]
-            return f"Tech outlook: {sector['outlook'].title()}. Key drivers: {', '.join(sector['drivers'])}. Top picks: {', '.join(sector['top_picks'])}. Risk: {sector['risk'].title()}."
-        # General JSE
-        strategies = AI_ADVISOR_KNOWLEDGE["stokvel_strategies"]
-        return f"For a {user_risk} risk profile, here's a proven stokvel strategy: {'; '.join(strategies)}. Want me to analyse a specific sector?"
-
-    # Risk profile
-    if any(w in q_lower for w in ["risk", "conservative", "moderate", "aggressive", "safe"]):
-        profile = AI_ADVISOR_KNOWLEDGE["risk_profiles"].get(user_risk, AI_ADVISOR_KNOWLEDGE["risk_profiles"]["moderate"])
-        return f"Your current profile is **{user_risk.title()}**. Recommended allocation: Bonds {profile['allocation']['bonds']}%, Cash {profile['allocation']['cash']}%, Equity {profile['allocation']['equity']}%, Crypto {profile['allocation']['crypto']}%. Expected return: {profile['expected_return']}."
-
-    # Statement analysis
-    if any(w in q_lower for w in ["statement", "bank", "spending", "income", "expense", "budget"]):
-        if statement.get("total_income", 0) > 0:
-            return f"From your bank statements: Income R{statement['total_income']:,.2f}, Expenses R{statement['total_expenses']:,.2f}, Net R{statement['net_flow']:,.2f}. I detected {statement.get('contribution_count', 0)} Khula contributions."
-        return "Upload your FNB statement on the Bank Sync page and I'll analyse your spending patterns and contribution capacity."
-
-    # Market / general
-    if any(w in q_lower for w in ["market", "rand", "usd", "interest rate", "sarb", "inflation", "economy"]):
-        return f"Latest SA market: JSE All Share {SA_MARKET_DATASET['jse_allshare']['value']:,} ({SA_MARKET_DATASET['jse_allshare']['change']:+.1f}%), USD/ZAR R{SA_MARKET_DATASET['usd_zar']['value']:.2f}, SARB rate {SA_MARKET_DATASET['sarb_rate']['value']:.2f}%. Gold is at R{SA_MARKET_DATASET['gold_price']['value']:,.0f}/oz."
-
-    # FNB / Crypto
-    if any(w in q_lower for w in ["fnb", "bank", "sync", "api"]):
-        return "FNB Open Banking integration allows automatic transaction sync. You can also upload PDF or CSV statements. Connect on the Bank Sync page."
-
-    if any(w in q_lower for w in ["bitcoin", "btc", "crypto", "ethereum", "eth"]):
-        return "Cryptocurrency is available as a high-risk allocation (up to 15% for aggressive profiles). Consider BTC and ETH via regulated SA exchanges like Luno or VALR."
-
-    # Fallback
-    return f"I'm your Khula Collective AI Advisor. I can help with JSE stock picks, contribution tracking, portfolio allocation, and market updates. Your current risk profile: {user_risk.title()}. What would you like to explore?"
+# The v3 static market snapshots and synthetic stock picks were removed from the
+# active user experience. See khula_intelligence for a source-labelled feed and
+# conservative savings-based educational guidance.
 
 def render_ai_advisor():
-    """AI Advisor page with chat interface and contextual insights."""
-    track_feature_usage(st.session_state.user_id, "ai_advisor")
-    st.markdown("""
-    <div class='main-header'>
-        <h1>🤖 AI Advisor</h1>
-        <p>Smart investment insights powered by your data</p>
-    </div>
-    """, unsafe_allow_html=True)
+    from khula_intelligence import render_investment_guide
+    return render_investment_guide()
 
-    context = get_ai_context(st.session_state.user_id)
-
-    # Context summary
-    with st.expander("📊 Your Context", expanded=False):
-        st.write(f"**Risk Profile:** {context['risk_profile'].title()}")
-        st.write(f"**Portfolio Value:** R{context['portfolio_value']:,.2f}")
-        st.write(f"**Monthly Target:** R{context['monthly_target']:,.2f}")
-        st.write(f"**This Month Contributed:** R{context['this_month_contrib']:,.2f}")
-        stmt = context.get("statement_summary", {})
-        if stmt.get("total_income", 0) > 0:
-            st.write(f"**Statement Income:** R{stmt['total_income']:,.2f}")
-            st.write(f"**Statement Expenses:** R{stmt['total_expenses']:,.2f}")
-
-    # Quick questions
-    st.subheader("Quick Questions")
-    quick_qs = [
-        "How is my portfolio doing?",
-        "What JSE stocks should I buy?",
-        "Am I on track with contributions?",
-        "What's the market outlook?",
-        "Should I invest in property REITs?",
-    ]
-    qcols = st.columns(len(quick_qs))
-    selected_q = None
-    for col, q in zip(qcols, quick_qs):
-        with col:
-            if st.button(q, key=f"qq_{q[:20]}", use_container_width=True):
-                selected_q = q
-
-    # Chat interface
-    st.subheader("Ask Your AI Advisor")
-    user_q = st.text_input("Your question", value=selected_q or "", placeholder="e.g., What JSE stocks are good for moderate risk?")
-
-    if st.button("Get Advice", type="primary", use_container_width=True) or selected_q:
-        if user_q:
-            with st.spinner("Analysing..."):
-                time.sleep(0.5)
-                response = generate_ai_response(user_q, context)
-                save_ai_conversation(st.session_state.user_id, user_q, response, context)
-            st.markdown(f"""
-            <div style='background:#1e1e30;padding:1rem;border-radius:12px;border:1px solid #2a2a40;margin-top:1rem;'>
-                <p style='color:#00b894;font-weight:600;margin:0;'>🤖 AI Advisor</p>
-                <p style='margin:0.5rem 0 0 0;'>{response}</p>
-            </div>
-            """, unsafe_allow_html=True)
-
-    # Conversation history
-    history = get_ai_conversation_history(st.session_state.user_id, limit=5)
-    if history:
-        st.subheader("Recent Conversations")
-        for q, r, created in history:
-            with st.expander(f"🧑 {q[:60]}..."):
-                st.write(f"**AI:** {r}")
-                st.caption(f"{created[:16] if created else ''}")
 
 def render_global_markets():
-    """Dedicated Global Markets Explorer — browse all investable assets worldwide."""
-    track_feature_usage(st.session_state.user_id, "global_markets")
-    st.markdown("""
-    <div class='main-header'>
-        <h1>🌍 Global Markets</h1>
-        <p>Explore investment opportunities across JSE, NYSE, LSE, crypto &amp; commodities</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # Bank balance for affordability
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("SELECT COALESCE(SUM(current_value), 0) FROM Investments")
-    portfolio_value = c.fetchone()[0] or 0
-    c.execute("SELECT COALESCE(SUM(amount), 0) FROM Monthly_Contributions WHERE status='paid'")
-    total_contributions = c.fetchone()[0] or 0
-    conn.close()
-    bank_balance = portfolio_value + total_contributions
-
-    # ── Filters ─────────────────────────────────────────────
-    st.markdown("<div style='margin-bottom:1rem;'></div>", unsafe_allow_html=True)
-    f1, f2, f3, f4 = st.columns(4)
-    with f1:
-        region_filter = st.multiselect("Region", ["SA", "US", "EU", "EM", "Crypto", "Commodity"], default=[])
-    with f2:
-        risk_filter = st.multiselect("Risk", ["low", "medium", "high"], default=[])
-    with f3:
-        cat_filter = st.multiselect("Category", ["stock", "etf", "crypto", "commodity"], default=[])
-    with f4:
-        sort_by = st.selectbox("Sort", ["Name", "Price (High-Low)", "Price (Low-High)", "Region"], index=0)
-
-    # ── Fetch / Mock Data ───────────────────────────────────
-    assets = []
-    for t in GLOBAL_TICKER_UNIVERSE:
-        if region_filter and t["region"] not in region_filter:
-            continue
-        if risk_filter and t["risk_level"] not in risk_filter:
-            continue
-        if cat_filter and t["category"] not in cat_filter:
-            continue
-
-        mock = _get_mock_market_data(t)
-        price_zar = _convert_to_zar(mock["price_usd"], t["region"])
-        afford = _calculate_affordability_cards(price_zar, bank_balance)
-
-        assets.append({
-            **t,
-            "price_usd": mock["price_usd"],
-            "price_zar": price_zar,
-            "change_pct": mock["change_pct"],
-            "pe_ratio": mock["pe_ratio"],
-            "dividend_yield": mock["dividend_yield"],
-            "market_cap": _format_market_cap(mock["market_cap"]),
-            "affordability": afford,
-        })
-
-    if sort_by == "Price (High-Low)":
-        assets.sort(key=lambda x: x["price_zar"] or 0, reverse=True)
-    elif sort_by == "Price (Low-High)":
-        assets.sort(key=lambda x: x["price_zar"] or float('inf'))
-    elif sort_by == "Region":
-        assets.sort(key=lambda x: x["region"])
-    else:
-        assets.sort(key=lambda x: x["name"])
-
-    if not assets:
-        st.info("No assets match your filters. Try adjusting your criteria.")
-        return
-
-    # ── Summary ─────────────────────────────────────────────
-    st.markdown(f"""
-    <p style='color:#a0a0b0;font-size:0.9rem;'>
-        Showing <strong>{len(assets)}</strong> assets 
-        &middot; Estimated balance: <strong>R{bank_balance:,.0f}</strong>
-    </p>
-    """, unsafe_allow_html=True)
-
-    # ── Asset Cards ─────────────────────────────────────────
-    grouped = _group_by_region(assets)
-    for region, group in grouped.items():
-        st.subheader(f"{_get_region_flag(region)} {_get_region_name(region)}")
-        cols = st.columns(2)
-        for i, a in enumerate(group):
-            with cols[i % 2]:
-                change_color = "#2ed573" if a["change_pct"] >= 0 else "#ff4757"
-                change_sign = "+" if a["change_pct"] >= 0 else ""
-                price_display = f"R{a['price_zar']:,.2f}" if a["price_zar"] else "N/A"
-
-                afford_html = ""
-                if a["affordability"] and a["affordability"]["units_affordable"] > 0:
-                    afford_html = f"<p style='font-size:0.8rem;color:#00b894;margin:0;'>💰 You can afford <strong>{a['affordability']['units_affordable']}</strong> units (R{a['affordability']['total_cost_zar']:,.0f})</p>"
-                elif a["affordability"]:
-                    afford_html = f"<p style='font-size:0.8rem;color:#ff4757;margin:0;'>⚠️ Requires R{a['price_zar']:,.0f} per unit — beyond 80% balance limit</p>"
-
-                pe_display = f"P/E: {a['pe_ratio']:.1f}" if a['pe_ratio'] else ""
-                div_display = f"Div: {a['dividend_yield']:.1f}%" if a['dividend_yield'] else ""
-                meta = " &middot; ".join(filter(None, [a["exchange"], pe_display, div_display, a["market_cap"]]))
-
-                st.markdown(f"""
-                <div style='background:#1e1e30;padding:1rem;border-radius:14px;border:1px solid #2a2a40;margin-bottom:0.75rem;'>
-                    <div style='display:flex;justify-content:space-between;align-items:center;'>
-                        <span style='font-weight:700;font-size:1rem;'>{a['name']}</span>
-                        {_risk_badge(a['risk_level'])}
-                    </div>
-                    <p style='font-size:0.8rem;color:#a0a0b0;margin:0;'>{a['ticker']} &middot; {meta}</p>
-                    <div style='display:flex;justify-content:space-between;align-items:center;margin-top:0.5rem;'>
-                        <span style='font-size:1.3rem;font-weight:700;color:#ffffff;'>{price_display}</span>
-                        <span style='color:{change_color};font-weight:600;'>{change_sign}{a['change_pct']:.2f}%</span>
-                    </div>
-                    {afford_html}
-                </div>
-                """, unsafe_allow_html=True)
-
-                if st.button(f"View {a['name']}", key=f"view_{a['ticker']}", use_container_width=True):
-                    st.session_state.selected_ticker = a
-                    st.info(f"Selected {a['name']} ({a['ticker']}) at {price_display}. This would open a detail view in production.")
-
-# End of khula_pages1.py
+    from khula_intelligence import render_market_explorer
+    return render_market_explorer()

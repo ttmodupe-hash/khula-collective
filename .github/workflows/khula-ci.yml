@@ -1,0 +1,47 @@
+name: Khula safety and regression checks
+
+on:
+  push:
+    branches:
+      - main
+      - 'feature/**'
+  pull_request:
+
+concurrency:
+  group: khula-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install application dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Validate Khula PWA assets and Streamlit head compatibility
+        run: |
+          python scripts/harden_install_page.py --check
+          python scripts/generate_pwa_icons.py --output-dir static
+          python scripts/patch_streamlit_pwa.py --check
+      - name: Validate Python syntax
+        run: python -m compileall -q app.py khula_config.py khula_utils.py khula_pages1.py khula_pages2.py khula_pages3.py khula_advisory_core.py khula_market_data.py khula_sarb.py khula_public_markets.py khula_governance.py khula_member_services.py khula_reporting.py khula_intelligence.py khula_security.py khula_invitations.py khula_bank_import.py khula_account.py khula_recovery.py khula_compliance.py khula_bank_access.py khula_applications.py khula_compass.py khula_membership_receipts.py khula_launch_center.py khula_owner_access.py khula_ai_engine.py khula_id_engine.py scripts tests
+      - name: Check Unix entrypoint syntax
+        run: sh -n khula_entrypoint.sh
+      - name: Validate Khula Mentor modules
+        run: python -m compileall -q khula_mentor.py khula_mentor_content.py khula_mentor_ui.py
+      - name: Run unit and financial-control tests
+        run: python -m unittest discover -s tests -v
+      - name: Open all member and administrator pages with isolated ledger
+        run: python scripts/smoke_member_pages.py
+      - name: Import production modules
+        run: python -c "import khula_ai_engine; import khula_member_services; import khula_intelligence; import app"

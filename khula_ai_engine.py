@@ -5,7 +5,13 @@ Supercharged investment advisor with real-time market data.
 import sqlite3
 import hashlib
 from datetime import datetime, timedelta
-from khula_messaging import *
+# The original build referenced an uncommitted khula_messaging module.
+# Never send alerts without an approved, consented provider integration.
+def send_whatsapp_message(user_id, message):
+    raise RuntimeError("Outbound WhatsApp notifications are not configured.")
+
+def send_sms_message(user_id, message):
+    raise RuntimeError("Outbound SMS notifications are not configured.")
 
 # --- Constants ---
 DB_PATH = "khula_market.db"

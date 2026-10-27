@@ -131,7 +131,7 @@ You've been invited to join the Khula Collective members' portal.
 Open this address in your browser:
 {site_url}
 
-Select “New member? Register with your invitation” and use this email:
+Select “Apply for access — invitation code optional” and use this email:
 {email}
 
 Your personal, single-use registration code:

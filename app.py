@@ -157,7 +157,9 @@ def main():
         st.session_state.nav_page = query_params["nav"]
         st.query_params.clear()
 
-    st.markdown(load_css(st.session_state.get('theme', 'dark')), unsafe_allow_html=True)
+    # load_css renders the stylesheet itself. Passing its None return value
+    # to st.markdown printed a literal "None" above the login screen.
+    load_css(st.session_state.get("theme", "dark"))
 
     if st.session_state.authenticated:
         current = member_auth_state(DB_PATH, st.session_state.user_id)
@@ -166,9 +168,9 @@ def main():
             return
 
     if not st.session_state.authenticated:
+        # The public landing renders every section in one responsive, native
+        # Streamlit column; do not append a full-width expander outside it.
         member_core.render_login()
-        with st.expander('🇿🇦 See sourced South African economic indicators'):
-            render_sarb_panel(expanded=False)
         return
 
     with st.sidebar:

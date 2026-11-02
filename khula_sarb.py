@@ -8,6 +8,7 @@ from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
 
 import requests
+from khula_telemetry import timed, adaptive_cache_ttl
 
 API_URL = "https://custom.resbank.co.za/SarbWebApi/WebIndicators/HomePageRates"
 OFFICIAL_PAGE = "https://www.resbank.co.za/"
@@ -68,15 +69,16 @@ def normalise_indicators(payload, *, today=None):
 
 def fetch_sarb_indicators():
     try:
-        resp = requests.get(
-            API_URL,
-            timeout=(4, 12),
-            headers={"Accept": "application/json", "User-Agent": "KhulaCollective/4.1"},
-        )
-        resp.raise_for_status()
-        if len(resp.content) > 200000:
-            raise SarbDataError("Unexpectedly large macroeconomic response.")
-        records = resp.json()
+        with timed("api.sarb_macro"):
+            resp = requests.get(
+                API_URL,
+                timeout=(4, 12),
+                headers={"Accept": "application/json", "User-Agent": "KhulaCollective/4.1"},
+            )
+            resp.raise_for_status()
+            if len(resp.content) > 200000:
+                raise SarbDataError("Unexpectedly large macroeconomic response.")
+            records = resp.json()
     except (requests.RequestException, ValueError) as exc:
         raise SarbDataError("Official economic data is temporarily unavailable.") from exc
     return {
@@ -89,7 +91,7 @@ def fetch_sarb_indicators():
 def render_sarb_panel(*, expanded=True):
     import streamlit as st
 
-    @st.cache_data(ttl=6 * 3600, show_spinner=False)
+    @st.cache_data(ttl=adaptive_cache_ttl("api.sarb_macro", 6 * 3600), show_spinner=False)
     def cached():
         return fetch_sarb_indicators()
 

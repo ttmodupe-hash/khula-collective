@@ -91,6 +91,11 @@ def record(event, outcome="ok", *, duration_ms=0, consent=False,
               - timedelta(days=RETENTION_DAYS)).isoformat()
     latency = _bounded_latency(duration_ms)
     target = _metric_path(db_path)
+    # Never follow a symlink or a misconfigured telemetry file into the
+    # permanent member/financial ledger.
+    from khula_config import DB_PATH
+    if target.is_symlink() or target.resolve() == Path(DB_PATH).resolve():
+        return False
     try:
         # No mkdir: production ledger mount must already be provisioned.
         with sqlite3.connect(str(target), timeout=0.2) as conn:
@@ -186,7 +191,9 @@ def render_consent():
 
 def _rows(path, days=7):
     target = _metric_path(path)
-    if not target.is_file():
+    from khula_config import DB_PATH
+    if (target.is_symlink() or target.resolve() == Path(DB_PATH).resolve()
+            or not target.is_file()):
         return []
     cutoff = (datetime.now(timezone.utc).date() - timedelta(days=days)).isoformat()
     try:

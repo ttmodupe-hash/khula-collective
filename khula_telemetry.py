@@ -27,7 +27,7 @@ NAV_PAGES = frozenset({
     "notifications", "reports", "ai_advisor", "global_markets", "whatsapp",
     "fnb_api_guide", "admin", "membership_approvals", "launch_center",
     "reconciliation", "invites", "bank_access", "compliance", "recoveries",
-    "id_verify", "profile",
+    "id_verify", "profile", "telemetry",
 })
 EVENTS = frozenset({
     "screen.login", "auth.login", "owner.setup", "member.application",

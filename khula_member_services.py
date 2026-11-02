@@ -244,6 +244,21 @@ def update_member_access(admin_id, target_id, role, active, db_path=DB_PATH):
         ).fetchone()
         if not current:
             raise ValueError("User not found.")
+        # A proven owner is an independently verified privileged identity.
+        # Even no-op general-access changes would revoke its active sessions.
+        # This guard must run inside the same write transaction as the change.
+        owner_table = conn.execute(
+            "SELECT 1 FROM sqlite_master "
+            "WHERE type='table' AND name='Owner_Admin_Activations'"
+        ).fetchone()
+        if owner_table and conn.execute(
+            "SELECT 1 FROM Owner_Admin_Activations WHERE owner_user_id=?",
+            (target_id,),
+        ).fetchone():
+            raise PermissionError(
+                "Verified owner administrator cannot be changed from member management. "
+                "Use the separate verified owner access procedure."
+            )
         # A public application may never be admitted by toggling the generic
         # active checkbox. Use the evidence-attested approval queue instead.
         from khula_applications import ensure_applications_schema

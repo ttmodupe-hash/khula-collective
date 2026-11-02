@@ -17,6 +17,7 @@ import khula_config as config
 from khula_owner_access import activate_owner_admin, owner_setup_available
 from khula_security import authenticate_user, hash_password
 from khula_applications import list_membership_requests
+from khula_member_services import update_member_access
 
 
 class RailwayOwnerActivationTests(unittest.TestCase):
@@ -109,6 +110,45 @@ class RailwayOwnerActivationTests(unittest.TestCase):
         self.assertEqual(list_membership_requests(self.db, uid), [])
         with self.assertRaises(ValueError):
             self.claim(username="another_admin")
+
+    def test_verified_owner_cannot_be_disabled_or_session_revoked_by_other_admins(self):
+        owner_id = self.claim()
+        with sqlite3.connect(self.db) as conn:
+            original = conn.execute(
+                "SELECT role,is_active,auth_epoch FROM Users WHERE user_id=?",
+                (owner_id,),
+            ).fetchone()
+        # An earlier administrator cannot deactivate the owner, and cannot
+        # invalidate sessions with a no-op update or a role-change attempt.
+        for actor, role, active in (
+            (1, "admin", False),
+            (1, "admin", True),
+            (1, "member", True),
+            (owner_id, "admin", False),
+        ):
+            with self.assertRaises(PermissionError):
+                update_member_access(actor, owner_id, role, active, db_path=self.db)
+        with sqlite3.connect(self.db) as conn:
+            self.assertEqual(
+                conn.execute(
+                    "SELECT role,is_active,auth_epoch FROM Users WHERE user_id=?",
+                    (owner_id,),
+                ).fetchone(),
+                original,
+            )
+            self.assertEqual(
+                conn.execute(
+                    "SELECT COUNT(*) FROM Admin_Actions "
+                    "WHERE action_type='member_access_updated'"
+                ).fetchone()[0],
+                0,
+            )
+        # Other pre-existing administrators remain ordinarily manageable,
+        # while the verified owner retains the approval queue privilege.
+        self.assertTrue(
+            update_member_access(owner_id, 1, "admin", False, db_path=self.db)
+        )
+        self.assertEqual(list_membership_requests(self.db, owner_id), [])
 
     def test_owner_claim_denies_wrong_email_and_weak_password(self):
         for email in ("attacker@example.invalid", "bad", "owner@different.invalid"):

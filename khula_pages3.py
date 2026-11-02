@@ -267,6 +267,17 @@ def render_admin():
         c = conn.cursor()
         from khula_applications import ensure_applications_schema
         ensure_applications_schema(conn)
+        # Prevent presenting controls for accounts protected by owner proof.
+        owner_account_ids = set()
+        if c.execute(
+            "SELECT 1 FROM sqlite_master "
+            "WHERE type='table' AND name='Owner_Admin_Activations'"
+        ).fetchone():
+            owner_account_ids = {
+                row[0] for row in c.execute(
+                    "SELECT owner_user_id FROM Owner_Admin_Activations"
+                ).fetchall()
+            }
         c.execute("SELECT user_id, username, full_name, email, role, is_active, monthly_contribution, fica_verified FROM Users")
         users = c.fetchall()
         applications = {
@@ -280,6 +291,14 @@ def render_admin():
             uid, uname, name, email, role, active, contrib, fica = u
             st.write(f"**{name}** (@{uname}) — {email or 'No email'}")
             st.caption(f"Role: {role}. Administrator privileges cannot be granted through this page.")
+            if uid in owner_account_ids:
+                st.info(
+                    "Verified owner administrator: this account is protected "
+                    "from general member access changes. Use the privately "
+                    "verified owner access procedure for recovery."
+                )
+                st.divider()
+                continue
             if applications.get(uid) == "pending":
                 st.warning(
                     "Registration request awaiting review. Use the Membership Approvals menu "

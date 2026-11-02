@@ -46,6 +46,7 @@ COPY khula_compass.py .
 COPY khula_membership_receipts.py .
 COPY khula_launch_center.py .
 COPY khula_owner_access.py .
+COPY khula_telemetry.py .
 COPY khula_intelligence.py .
 COPY khula_mentor.py .
 COPY khula_mentor_content.py .

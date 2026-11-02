@@ -5,6 +5,7 @@ from khula_security import register_member, registration_enabled, member_auth_st
 from khula_applications import request_membership, public_registration_enabled
 from khula_membership_receipts import render_receipt_lookup
 from khula_owner_access import render_owner_setup
+from khula_telemetry import note as telemetry_note, note_once, render_consent
 from khula_compliance import render_public_notice, onboarding_gate_status
 from khula_advisory_core import bank_snapshot_fresh
 from khula_config import *
@@ -80,6 +81,9 @@ def render_login():
                 "You can then approve requests under Membership Approvals."
             )
 
+        render_consent()
+        note_once("screen.login")
+
         # The private link leads with setup/recovery, before normal sign-in.
         render_owner_setup()
 
@@ -92,11 +96,14 @@ def render_login():
                 password = st.text_input("Password", type="password", placeholder="Enter password")
                 submitted = st.form_submit_button("Sign in to Khula", use_container_width=True, type="primary")
                 if submitted:
+                    started = time.perf_counter()
                     if not username or not password:
+                        telemetry_note("auth.login", "blocked", started=started)
                         st.error("Please enter both username and password")
                         return
                     user = authenticate(username, password)
                     if user:
+                        telemetry_note("auth.login", "ok", started=started)
                         st.session_state.pop("_khula_owner_setup_complete", None)
                         st.session_state.authenticated = True
                         st.session_state.logged_in = True
@@ -112,6 +119,7 @@ def render_login():
                         st.success(f"Welcome back, {user[2]}!")
                         st.rerun()
                     else:
+                        telemetry_note("auth.login", "failed", started=started)
                         st.error("Sign-in failed. Check your username/email and password. After 8 failed attempts, wait 15 minutes or use owner recovery with a fresh code. Pending members cannot sign in.")
 
             st.link_button("Owner login help / reset password", "/?owner_setup=1")
@@ -192,12 +200,15 @@ def render_login():
                         )
                         submitted = st.form_submit_button("Submit membership request")
                         if submitted:
+                            started = time.perf_counter()
                             if not (adult and acknowledged and transferred):
+                                telemetry_note("member.application", "blocked", started=started)
                                 st.error(
                                     "Please read the privacy information and confirm all "
                                     "three eligibility and consent statements."
                                 )
                             elif new_password != confirm_password:
+                                telemetry_note("member.application", "blocked", started=started)
                                 st.error("Passwords do not match.")
                             else:
                                 try:
@@ -222,6 +233,7 @@ def render_login():
                                         )
                                     if isinstance(result, dict):
                                         st.session_state["_khula_last_receipt"] = result["tracking_code"]
+                                    telemetry_note("member.application", "ok", started=started)
                                     st.success(
                                         "Your request was recorded, but you CANNOT sign in yet. "
                                         "An active club administrator must independently verify "
@@ -229,6 +241,7 @@ def render_login():
                                         "No automatic email has been sent."
                                     )
                                 except (ValueError, PermissionError) as exc:
+                                    telemetry_note("member.application", "blocked", started=started)
                                     st.error(str(exc))
 
         tracking = st.session_state.get("_khula_last_receipt")
@@ -515,11 +528,14 @@ def render_payment_progress():
             method = st.selectbox("Payment method", ["EFT", "Cash", "Other"])
             reference = st.text_input("Bank or receipt reference (no account numbers)")
             if st.form_submit_button("Submit for review"):
+                started = time.perf_counter()
                 try:
                     submit_payment_claim(st.session_state.user_id, now.year, now.month, amount, method, reference)
+                    telemetry_note("payment.claim", "ok", started=started)
                     st.success("Payment claim submitted, pending bank/receipt review.")
                     st.rerun()
                 except (ValueError, PermissionError) as exc:
+                    telemetry_note("payment.claim", "blocked", started=started)
                     st.error(str(exc))
         if claims:
             st.subheader("My recent claims")

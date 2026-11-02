@@ -291,6 +291,14 @@ def render_admin():
             uid, uname, name, email, role, active, contrib, fica = u
             st.write(f"**{name}** (@{uname}) — {email or 'No email'}")
             st.caption(f"Role: {role}. Administrator privileges cannot be granted through this page.")
+            if uid in owner_account_ids:
+                st.info(
+                    "Verified owner administrator: this account is protected "
+                    "from general member access changes. Use the privately "
+                    "verified owner access procedure for recovery."
+                )
+                st.divider()
+                continue
             if applications.get(uid) == "pending":
                 st.warning(
                     "Registration request awaiting review. Use the Membership Approvals menu "

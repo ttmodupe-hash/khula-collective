@@ -31,6 +31,7 @@ MEMBER_PAGES = (
 ADMIN_PAGES = (
     "admin", "membership_approvals", "launch_center",
     "reconciliation", "invites", "bank_access", "compliance", "recoveries",
+    "telemetry",
 )
 
 

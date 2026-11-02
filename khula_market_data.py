@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 
 import requests
+from khula_telemetry import timed
 
 
 class MarketDataError(Exception):
@@ -32,14 +33,15 @@ def _request(endpoint, params):
         raise MarketDataError("Market data not configured or commercial display rights not confirmed.")
     key = os.environ["KHULA_TWELVEDATA_API_KEY"]
     try:
-        response = requests.get(
-            API_BASE + endpoint,
-            params={**params, "apikey": key, "format": "JSON"},
-            timeout=(3, 8),
-            headers={"Accept": "application/json", "User-Agent": "KhulaCollective/4.1"},
-        )
-        response.raise_for_status()
-        data = response.json()
+        with timed("api.licensed_market"):
+            response = requests.get(
+                API_BASE + endpoint,
+                params={**params, "apikey": key, "format": "JSON"},
+                timeout=(3, 8),
+                headers={"Accept": "application/json", "User-Agent": "KhulaCollective/4.1"},
+            )
+            response.raise_for_status()
+            data = response.json()
     except (requests.RequestException, ValueError) as exc:
         raise MarketDataError("Market provider unavailable; no quote can be shown.") from exc
     if not isinstance(data, dict) or data.get("status") == "error" or "code" in data:

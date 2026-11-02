@@ -17,6 +17,7 @@ import khula_config as config
 from khula_owner_access import activate_owner_admin, owner_setup_available
 from khula_security import authenticate_user, hash_password
 from khula_applications import list_membership_requests
+from khula_member_services import update_member_access
 
 
 class RailwayOwnerActivationTests(unittest.TestCase):

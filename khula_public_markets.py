@@ -8,6 +8,7 @@ from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
 
 import requests
+from khula_telemetry import timed, adaptive_cache_ttl
 
 SOURCE = "South African Reserve Bank"
 API_URL = "https://custom.resbank.co.za/SarbWebApi/WebIndicators/CurrentMarketRates"
@@ -72,15 +73,16 @@ def normalise_current_market_rates(payload, *, today=None):
 
 def fetch_current_market_rates():
     try:
-        response = requests.get(
-            API_URL,
-            timeout=(4, 12),
-            headers={"Accept": "application/json", "User-Agent": "KhulaCollective/4.2"},
-        )
-        response.raise_for_status()
-        if len(response.content) > 250000:
-            raise SarbMarketError("Official market response exceeds size limits.")
-        data = response.json()
+        with timed("api.sarb_markets"):
+            response = requests.get(
+                API_URL,
+                timeout=(4, 12),
+                headers={"Accept": "application/json", "User-Agent": "KhulaCollective/4.2"},
+            )
+            response.raise_for_status()
+            if len(response.content) > 250000:
+                raise SarbMarketError("Official market response exceeds size limits.")
+            data = response.json()
     except (requests.RequestException, ValueError) as exc:
         raise SarbMarketError("Official money and capital market data is temporarily unavailable.") from exc
     return {
@@ -93,7 +95,7 @@ def fetch_current_market_rates():
 def render_current_market_rates():
     import streamlit as st
 
-    @st.cache_data(ttl=3600, show_spinner=False)
+    @st.cache_data(ttl=adaptive_cache_ttl("api.sarb_markets", 3600), show_spinner=False)
     def _cached():
         return fetch_current_market_rates()
 

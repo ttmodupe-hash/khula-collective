@@ -9,6 +9,7 @@ from decimal import Decimal, InvalidOperation
 
 import requests
 from khula_telemetry import timed, adaptive_cache_ttl
+from khula_resilience import public_request_guard, ProviderBackoff
 
 API_URL = "https://custom.resbank.co.za/SarbWebApi/WebIndicators/HomePageRates"
 OFFICIAL_PAGE = "https://www.resbank.co.za/"
@@ -69,7 +70,7 @@ def normalise_indicators(payload, *, today=None):
 
 def fetch_sarb_indicators():
     try:
-        with timed("api.sarb_macro"):
+        with public_request_guard("sarb_macro"), timed("api.sarb_macro"):
             resp = requests.get(
                 API_URL,
                 timeout=(4, 12),
@@ -79,7 +80,7 @@ def fetch_sarb_indicators():
             if len(resp.content) > 200000:
                 raise SarbDataError("Unexpectedly large macroeconomic response.")
             records = resp.json()
-    except (requests.RequestException, ValueError) as exc:
+    except (requests.RequestException, ValueError, ProviderBackoff) as exc:
         raise SarbDataError("Official economic data is temporarily unavailable.") from exc
     return {
         "data": normalise_indicators(records),

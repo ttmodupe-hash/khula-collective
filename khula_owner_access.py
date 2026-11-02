@@ -12,11 +12,13 @@ import hmac
 import os
 import re
 import sqlite3
+import time
 from datetime import datetime, timezone, timedelta
 
 import streamlit as st
 
 from khula_security import hash_password
+from khula_telemetry import note as telemetry_note
 
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
 TOKEN = re.compile(r"^[A-Za-z0-9_-]{43}$")
@@ -262,7 +264,9 @@ def render_owner_setup():
                 use_container_width=True,
             )
         if submit:
+            started = time.perf_counter()
             if password != confirmation:
+                telemetry_note("owner.setup", "blocked", started=started)
                 st.error("The administrator passwords do not match.")
             else:
                 try:
@@ -271,8 +275,10 @@ def render_owner_setup():
                         password, approved=approval,
                     )
                 except (ValueError, PermissionError) as exc:
+                    telemetry_note("owner.setup", "blocked", started=started)
                     st.error(str(exc))
                 else:
+                    telemetry_note("owner.setup", "ok", started=started)
                     # Clear the entire public Streamlit session after a
                     # privileged recovery (including form-widget secrets).
                     # The next run displays only a non-secret success notice.

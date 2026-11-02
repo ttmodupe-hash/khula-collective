@@ -22,6 +22,10 @@ from khula_applications import render_membership_approvals
 from khula_compass import render_compass
 from khula_mentor_ui import render_mentor
 from khula_launch_center import render_launch_center
+from khula_telemetry import (
+    note as telemetry_note, render_consent, popular_shortcuts,
+    render_admin_dashboard,
+)
 from khula_member_services import (
     render_admin_reconciliation,
     render_club_goals,
@@ -161,6 +165,26 @@ def main():
     # load_css renders the stylesheet itself. Passing its None return value
     # to st.markdown printed a literal "None" above the login screen.
     load_css(st.session_state.get("theme", "dark"))
+    # Stable native widgets, subtle feedback and motion-sensitive accessibility.
+    # Do not animate the private financial table or reposition form controls.
+    st.markdown("""
+    <style>
+      [data-testid="stButton"] button,
+      [data-testid="stFormSubmitButton"] button {
+        transition: transform 140ms ease, box-shadow 140ms ease;
+      }
+      [data-testid="stButton"] button:active,
+      [data-testid="stFormSubmitButton"] button:active {
+        transform: scale(.985);
+      }
+      @media (prefers-reduced-motion: reduce) {
+        [data-testid="stButton"] button,
+        [data-testid="stFormSubmitButton"] button { transition: none; }
+        [data-testid="stButton"] button:active,
+        [data-testid="stFormSubmitButton"] button:active { transform: none; }
+      }
+    </style>
+    """, unsafe_allow_html=True)
 
     if st.session_state.authenticated:
         current = member_auth_state(DB_PATH, st.session_state.user_id)
@@ -184,6 +208,7 @@ def main():
         """, unsafe_allow_html=True)
 
         st.divider()
+        render_consent()
 
         st.link_button(
             "📲 Install Khula on your phone",
@@ -228,14 +253,32 @@ def main():
             nav_items.append(("bank_access", "🏦 FNB Bank Access"))
             nav_items.append(("compliance", "🛡️ POPIA Readiness"))
             nav_items.append(("recoveries", "🔑 Account Recovery"))
+            nav_items.append(("telemetry", "📊 App Performance"))
         nav_items.append(("id_verify", "🆔 ID Verify"))
         nav_items.append(("profile", "👤 Profile"))
 
         for page_key, label in nav_items:
             if st.button(label, use_container_width=True, key=f"nav_{page_key}",
                         type="primary" if st.session_state.nav_page == page_key else "secondary"):
+                telemetry_note("nav." + page_key)
                 st.session_state.nav_page = page_key
                 st.rerun()
+
+        suggestions = popular_shortcuts()
+        if suggestions:
+            st.caption("Popular shortcuts · anonymous usage totals")
+            shortcuts = {
+                "dashboard": "Home", "payments": "Payments", "mentor": "Mentor",
+                "goals": "Savings Goals", "economy": "SA Economy",
+                "constitution": "Constitution", "reports": "Reports",
+                "features": "Discover", "profile": "My Profile",
+            }
+            for page_key in suggestions:
+                if st.button(shortcuts[page_key], key="quick_" + page_key,
+                             use_container_width=True):
+                    telemetry_note("nav." + page_key)
+                    st.session_state.nav_page = page_key
+                    st.rerun()
 
         st.divider()
 
@@ -320,6 +363,11 @@ def main():
         render_membership_approvals()
     elif page == "launch_center":
         render_launch_center()
+    elif page == "telemetry":
+        if st.session_state.role == "admin":
+            render_admin_dashboard(DB_PATH, st.session_state.user_id)
+        else:
+            st.error("Administrator access required.")
     elif page == "reconciliation":
         render_admin_reconciliation()
     elif page == "invites":

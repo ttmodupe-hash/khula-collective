@@ -13,6 +13,7 @@ import sqlite3
 import unicodedata
 
 from khula_mentor_content import BY_ID, CONTENT_VERSION, LESSONS, LEVELS, PATHS
+from khula_telemetry import timed
 
 CENT = Decimal("0.01")
 AI_MEMBER_DAILY_LIMIT = 10
@@ -260,7 +261,7 @@ def generate_ai_reply(db_path, user_id, auth_epoch, lesson_id, question, level, 
                           "question": question}, ensure_ascii=True)
     try:
         from openai import OpenAI
-        with OpenAI(api_key=env["OPENAI_API_KEY"], base_url="https://api.openai.com/v1",
+        with timed("api.mentor"), OpenAI(api_key=env["OPENAI_API_KEY"], base_url="https://api.openai.com/v1",
                     timeout=15, max_retries=0) as client:
             response = client.responses.create(
                 model=env["KHULA_MENTOR_AI_MODEL"], store=False,

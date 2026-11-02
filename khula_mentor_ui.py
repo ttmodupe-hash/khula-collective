@@ -1,4 +1,5 @@
 """Member-only Khula Mentor. Native Streamlit controls work on phone and desktop."""
+import time
 import streamlit as st
 
 from khula_config import DB_PATH
@@ -7,6 +8,7 @@ from khula_mentor import (
     library_reply, next_lesson, practice_projection, record_answer, set_progress_consent,
 )
 from khula_mentor_content import BY_ID, CONTENT_VERSION, LESSONS, LEVELS, PATHS, SOURCES
+from khula_telemetry import note as telemetry_note
 
 
 def _clear_learning_session():
@@ -124,7 +126,9 @@ def _tutor_view(uid, epoch, lesson_id):
                        "terms apply. Up to 10 AI requests per member per UTC day; library answers remain available.")
         submitted = st.form_submit_button("Ask my mentor", use_container_width=True)
     if submitted:
+        started = time.perf_counter()
         if not question.strip():
+            telemetry_note("mentor.ask", "blocked", started=started)
             st.warning("Write a short question first.")
         else:
             try:
@@ -136,7 +140,9 @@ def _tutor_view(uid, epoch, lesson_id):
                 history = list(st.session_state.get("mentor_conversation", []))[-4:]
                 history.append({"question": question, "reply": reply})
                 st.session_state.mentor_conversation = history
+                telemetry_note("mentor.ask", "ok", started=started)
             except (ValueError, PermissionError, MentorUnavailable) as exc:
+                telemetry_note("mentor.ask", "blocked", started=started)
                 st.warning(str(exc))
     for item in st.session_state.get("mentor_conversation", []):
         reply = item["reply"]

@@ -8,11 +8,13 @@ ID numbers, sensitive documents or payment proof are accepted here.
 import os
 import re
 import sqlite3
+import time
 from datetime import datetime, timezone, timedelta
 
 from khula_compliance import onboarding_gate_status, record_notice_acknowledgement, running_live
 from khula_invitations import email_normalised
 from khula_membership_receipts import issue_status_receipt
+from khula_telemetry import note as telemetry_note, note_once
 
 USERNAME_RE = re.compile(r"^[a-z][a-z0-9_]{2,29}$")
 MAX_HOURLY_APPLICATIONS = 30
@@ -277,6 +279,7 @@ def render_membership_approvals():
         st.error("Administrator access required.")
         return
     st.title("✅ Membership applications")
+    note_once("member.review")
     st.caption(
         "Anyone may request membership once the approved privacy setup is active. "
         "Only an authorised administrator can admit a person to private data."
@@ -348,25 +351,31 @@ def render_membership_approvals():
                     disabled=not (checked_identity and checked_club),
                     type="primary",
                 ):
+                    started = time.perf_counter()
                     try:
                         review_membership_request(
                             DB_PATH, st.session_state.user_id, aid, "approved",
                             identity_confirmed=checked_identity,
                             eligibility_confirmed=checked_club,
                         )
+                        telemetry_note("member.approval", "ok", started=started)
                         st.success("Membership approved; credentials may now access the private portal.")
                         st.rerun()
                     except (ValueError, PermissionError) as exc:
+                        telemetry_note("member.approval", "blocked", started=started)
                         st.error(str(exc))
             with b:
                 if st.button("Reject request", key=f"reject_membership_{aid}"):
+                    started = time.perf_counter()
                     try:
                         review_membership_request(
                             DB_PATH, st.session_state.user_id, aid, "rejected"
                         )
+                        telemetry_note("member.rejection", "ok", started=started)
                         st.warning("Application rejected. No login access was granted.")
                         st.rerun()
                     except (ValueError, PermissionError) as exc:
+                        telemetry_note("member.rejection", "blocked", started=started)
                         st.error(str(exc))
     st.caption(
         "Approvals and rejections are audit-logged. Khula does not currently "

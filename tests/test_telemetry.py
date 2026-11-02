@@ -178,6 +178,20 @@ class TelemetryPrivacyTests(unittest.TestCase):
             }),
         )
 
+    def test_symlink_cannot_redirect_telemetry_into_financial_ledger(self):
+        with sqlite3.connect(self.ledger) as conn:
+            before = conn.execute("SELECT * FROM Users ORDER BY user_id").fetchall()
+        self.metrics.symlink_to(self.ledger)
+        self.assertFalse(self.submit("auth.login"))
+        with sqlite3.connect(self.ledger) as conn:
+            self.assertEqual(
+                conn.execute("SELECT * FROM Users ORDER BY user_id").fetchall(),
+                before,
+            )
+            self.assertFalse(conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE name='Telemetry_Daily'"
+            ).fetchone())
+
     def test_storage_failure_degrades_without_affecting_user_work(self):
         self.assertFalse(
             record("auth.login", consent=True, env=APPROVED,

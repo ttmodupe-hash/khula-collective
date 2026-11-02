@@ -15,6 +15,11 @@ to the persistent financial/member ledger.
   data, and (only if separately approved) the external AI tutor.
 - Landing impressions are counted once *per consenting Streamlit session* to
   avoid double counting reruns. **This is not unique-user measurement.**
+- Read-only SARB and licensed market-data requests use an in-process breaker:
+  three consecutive upstream errors in a minute temporarily pause the
+  source (15 to 120 seconds), retaining the existing official-source error
+  and link instead of fabricating a quote. Bank and login workflows are
+  never modified by this breaker. Process-local throttling resets on restart.
 - The existing Streamlit cache protects sourced public APIs; a bounded 2x
   extension to the public cache TTL is allowed **only** after at least 20
   consenting API observations over seven days and >=50% observed errors.

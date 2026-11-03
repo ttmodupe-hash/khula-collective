@@ -1,3 +1,8 @@
+from khula_security import (
+    authenticate_user as secure_authenticate,
+    hash_password as secure_hash_password,
+)
+
 from khula_config import *
 
 def load_css(theme):
@@ -51,53 +56,35 @@ def load_css(theme):
     st.markdown(css, unsafe_allow_html=True)
 
 class FNBAPIClient:
+    """Read-only placeholder: never pretend a bank connection is authenticated."""
+
     def __init__(self, client_id=None, client_secret=None):
-        self.client_id = client_id or FNB_CLIENT_ID
-        self.client_secret = client_secret or FNB_CLIENT_SECRET
-        self.base_url = FNB_API_BASE
         self.connected = False
-        self.access_token = None
+
     def connect(self):
-        if not self.client_id or not self.client_secret:
-            return {"success": False, "error": "FNB API credentials not configured"}
-        self.connected = True
-        self.access_token = "simulated_fnb_token_" + hashlib.sha256((self.client_id + self.client_secret).encode()).hexdigest()[:16]
-        return {"success": True, "message": "Connected to FNB"}
+        return {
+            "success": False,
+            "error": "Live FNB account access is not connected. Upload an export from FNB for review instead.",
+        }
+
     def get_transactions(self, account_number, days=30):
-        if not self.connected:
-            return {"success": False, "error": "Not connected to FNB"}
-        transactions = []
-        for i in range(random.randint(5, 15)):
-            date = datetime.now() - timedelta(days=random.randint(1, days))
-            amount = random.choice([500.00, 250.00, 1000.00, 500.00, 500.00])
-            transactions.append({
-                "transaction_id": f"FNB{random.randint(10000000, 99999999)}",
-                "date": date.strftime("%Y-%m-%d"),
-                "description": random.choice(["Khula Collective Contribution", "STOKVEL CONTRIBUTION", "Monthly Payment - Khula", "Investment Club Deposit"]),
-                "amount": amount, "type": "credit",
-                "reference": f"KHULA-{random.randint(1000, 9999)}", "status": "completed"
-            })
-        return {"success": True, "transactions": transactions}
+        return {
+            "success": False,
+            "error": "No authorised bank data connection.",
+            "transactions": [],
+        }
 
 def hash_password(password):
-    return hashlib.sha256(password.encode()).hexdigest()
+    return secure_hash_password(password)
+
 
 def authenticate(username, password):
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    pw_hash = hash_password(password)
-    c.execute("SELECT user_id, username, full_name, role, theme_preference FROM Users WHERE username=? AND password_hash=? AND is_active=1", (username, pw_hash))
-    user = c.fetchone()
-    if user:
-        c.execute("UPDATE Users SET last_login=? WHERE user_id=?", (datetime.now().isoformat(), user[0]))
-        conn.commit()
-    conn.close()
-    return user
+    return secure_authenticate(DB_PATH, username, password)
 
 def add_notification(user_id, title, message, notif_type="info"):
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    c.execute("INSERT INTO Notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)", (user_id, title, message, notif_type))
+    c.execute("INSERT INTO Notifications (user_id, title, message, type, created_at) VALUES (?, ?, ?, ?, ?)", (user_id, title, message, notif_type, datetime.now().isoformat()))
     conn.commit()
     conn.close()
 
@@ -109,10 +96,10 @@ def get_notifications(user_id, limit=20):
     conn.close()
     return rows
 
-def mark_notification_read(notification_id):
+def mark_notification_read(notification_id, user_id):
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    c.execute("UPDATE Notifications SET is_read=1 WHERE notification_id=?", (notification_id,))
+    c.execute("UPDATE Notifications SET is_read=1 WHERE notification_id=? AND user_id=?", (notification_id, user_id))
     conn.commit()
     conn.close()
 
@@ -127,7 +114,7 @@ def get_unread_count(user_id):
 def track_feature_usage(user_id, feature_id):
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    c.execute("INSERT INTO Feature_Usage (user_id, feature_id) VALUES (?, ?)", (user_id, feature_id))
+    c.execute("INSERT INTO Feature_Usage (user_id, feature_id, used_at) VALUES (?, ?, ?)", (user_id, feature_id, datetime.now().isoformat()))
     conn.commit()
     conn.close()
 
@@ -318,7 +305,7 @@ def get_ai_context(user_id):
     # Contribution status
     current_year = datetime.now().year
     current_month = datetime.now().month
-    c.execute("SELECT COALESCE(SUM(amount), 0) FROM Monthly_Contributions WHERE user_id=? AND year=? AND month=?", (user_id, current_year, current_month))
+    c.execute("SELECT COALESCE(SUM(amount), 0) FROM Monthly_Contributions WHERE user_id=? AND year=? AND month=? AND status=\'paid\'", (user_id, current_year, current_month))
     this_month_contrib = c.fetchone()[0] or 0
     
     # Statement summary
@@ -340,8 +327,8 @@ def save_ai_conversation(user_id, question, response, context):
     import json
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    c.execute("INSERT INTO AI_Conversations (user_id, question, response, context_data) VALUES (?,?,?,?)",
-              (user_id, question, response, json.dumps(context)))
+    c.execute("INSERT INTO AI_Conversations (user_id, question, response, context_data, created_at) VALUES (?,?,?,?,?)",
+              (user_id, question, response, json.dumps(context), datetime.now().isoformat()))
     conn.commit()
     conn.close()
 
@@ -374,6 +361,7 @@ def render_login():
                     return
                 user = authenticate(username, password)
                 if user:
+                    st.session_state.authenticated = True
                     st.session_state.logged_in = True
                     st.session_state.user_id = user[0]
                     st.session_state.username = user[1]

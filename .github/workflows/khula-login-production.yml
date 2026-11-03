@@ -1,0 +1,50 @@
+name: Khula production public login browser acceptance
+
+on:
+  push:
+    branches:
+      - 'feature/khula-parity-savings-intelligence-20261026'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: khula-production-public-login-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify-public-login:
+    runs-on: ubuntu-latest
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install isolated browser-test dependency only
+        run: |
+          pip install 'playwright>=1.56,<2.0'
+          python -m playwright install chromium
+      - name: Verify the REAL public website is centered and error free
+        run: |
+          for attempt in $(seq 1 45); do
+            if python scripts/check_login_layout.py \
+              --url https://khula-collective-production.up.railway.app \
+              --screenshots visual-tests; then
+              echo "Khula public desktop/mobile login accepted."
+              exit 0
+            fi
+            echo "Public release not ready (attempt $attempt); retrying."
+            sleep 10
+          done
+          echo "Khula public login failed external responsive acceptance."
+          exit 1
+      - name: Upload actual Railway public-login screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: khula-production-login-desktop-mobile
+          path: visual-tests/*.png
+          retention-days: 7
+          if-no-files-found: ignore

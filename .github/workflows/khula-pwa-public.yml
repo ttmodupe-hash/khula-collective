@@ -1,0 +1,44 @@
+name: Khula mobile app public acceptance
+
+on:
+  push:
+    branches:
+      - 'feature/khula-parity-savings-intelligence-20261026'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: khula-pwa-public-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mobile-install:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Check that Railway serves the released Khula web app metadata
+        run: |
+          # GitHub's push event can precede Railway's new successful deploy.
+          # Poll the public site only; never inspect private club records.
+          for attempt in $(seq 1 48); do
+            if python scripts/check_public_pwa.py \
+                --url https://khula-collective-production.up.railway.app; then
+              echo "Khula home-screen installation endpoints verified."
+              exit 0
+            fi
+            echo "Public PWA not ready for attempt $attempt; retrying."
+            sleep 10
+          done
+          echo "Railway did not serve the expected Khula PWA within the acceptance window."
+          exit 1
+      - name: Verify secure mobile installer in disposable Android and iPhone browser views
+        run: |
+          pip install 'playwright>=1.56,<2.0'
+          python -m playwright install chromium
+          python scripts/check_install_browser.py --url https://khula-collective-production.up.railway.app

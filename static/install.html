@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en-ZA">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#00b894">
+  <meta name="description" content="Add Khula Collective to your phone's home screen.">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Khula">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; object-src 'none'; worker-src 'none'; connect-src 'none'; img-src 'self'; font-src 'none'; media-src 'none'; manifest-src 'self'; script-src 'sha256-KHULA_CSP_SCRIPT_HASH'; style-src 'sha256-KHULA_CSP_STYLE_HASH'; upgrade-insecure-requests">
+  <link rel="manifest" href="/app/static/khula-manifest.json">
+  <link rel="icon" href="/app/static/khula-icon-192.png" type="image/png" sizes="192x192">
+  <link rel="apple-touch-icon" href="/app/static/khula-icon-192.png">
+  <title>Install Khula Collective</title>
+  <style>
+    :root{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color-scheme:dark;background:#07120f;color:#f3fbf7}
+    *{box-sizing:border-box}
+    body{margin:0;min-height:100vh;min-height:100dvh;padding:28px 18px 44px;background:radial-gradient(circle at 50% 5%,#123a2b 0%,#07120f 55%)}
+    main{margin:auto;max-width:520px}
+    .hero{text-align:center;padding:18px 0 14px}
+    .logo{width:100px;height:100px;border-radius:24px;box-shadow:0 14px 36px #0006;margin-bottom:10px}
+    h1{font-size:clamp(1.6rem,6vw,2.25rem);line-height:1.13;letter-spacing:-.045em;margin:12px 0}
+    .lead{color:#a9c3b7;margin:9px auto 22px;max-width:36ch;font-size:1.03rem;line-height:1.5}
+    .panel{background:#10241d;border:1px solid #2a5342;border-radius:22px;padding:23px 20px;margin:16px 0}
+    h2{font-size:1.15rem;letter-spacing:-.018em;margin:0 0 14px}
+    .primary,.secondary{display:block;text-decoration:none;text-align:center;border-radius:13px;padding:15px 18px;font-weight:700;width:100%;font-size:1.01rem;cursor:pointer}
+    .primary{border:0;color:#072013;background:#3ce4a1}
+    .primary:hover{background:#86f5c1}
+    .secondary{border:1px solid #4e6b5b;background:transparent;color:#e5f4e9;margin-top:11px}
+    .primary:focus-visible,.secondary:focus-visible{outline:3px solid #f5d67e;outline-offset:3px}
+    .steps{margin:0;padding-left:1.55rem;line-height:1.8;color:#d8e8df}
+    .steps li{padding-left:.25rem;margin:5px 0}
+    .eyebrow{display:inline-block;font-size:.75rem;font-weight:800;text-transform:uppercase;letter-spacing:.09em;color:#82e8af}
+    .note{font-size:.88rem;line-height:1.5;color:#a8c2b5;margin-top:15px}
+    .muted{font-size:.87rem;line-height:1.55;color:#a8c2b5;text-align:center}
+    .badge{display:inline-block;padding:6px 10px;border-radius:100px;background:#17432f;color:#a2f2c8;font-size:.78rem;font-weight:600}
+    [hidden]{display:none!important}
+    @media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+  </style>
+</head>
+<body>
+  <main>
+    <header class="hero">
+      <img class="logo" src="/app/static/khula-icon-192.png" alt="Khula Collective home-screen icon" width="100" height="100">
+      <div><span class="badge">Install from the website</span></div>
+      <h1>Khula in your pocket.</h1>
+      <p class="lead">Put your private savings-club portal on your home screen. No app-store download required.</p>
+      <p class="note">Official installation address: <strong>khula-collective-production.up.railway.app</strong></p>
+    </header>
+
+    <section class="panel" aria-labelledby="install-heading">
+      <h2 id="install-heading">Get the Khula app</h2>
+      <button id="install-button" class="primary" type="button" hidden>Install Khula on this device</button>
+      <p id="install-hint" class="note" role="status" aria-live="polite"></p>
+      <div id="ios-help" hidden>
+        <span class="eyebrow">iPhone / iPad</span>
+        <ol class="steps">
+          <li>Open this page in <strong>Safari</strong>.</li>
+          <li>Tap <strong>Share</strong> and choose <strong>Add to Home Screen</strong>.</li>
+          <li>Enable <strong>Open as Web App</strong> if shown, then tap <strong>Add</strong>.</li>
+        </ol>
+      </div>
+      <div id="android-help" hidden>
+        <span class="eyebrow">Android</span>
+        <ol class="steps">
+          <li>Open this page in <strong>Chrome</strong> or Samsung Internet.</li>
+          <li>Tap the <strong>⋮ menu</strong>.</li>
+          <li>Choose <strong>Install app</strong> or <strong>Add to Home screen</strong> and confirm.</li>
+        </ol>
+      </div>
+      <div id="default-help" hidden>
+        <span class="eyebrow">Install from your browser</span>
+        <p>Use your browser’s menu to choose <strong>Install app</strong> or <strong>Add to Home Screen</strong>. Browser and phone support may vary.</p>
+      </div>
+      <a class="secondary" href="/">Open Khula Collective</a>
+      <p class="note">You must still register and be approved by a club administrator before accessing private member information.</p>
+    </section>
+    <p class="muted">Khula is an installable web app, not an Android APK or an App Store download. An internet connection is required for sign-in and member data. It does not cache financial records for offline access.</p>
+    <p class="muted">For safety, install from this official HTTPS website only. Never download an unofficial Khula APK or share your club password, PIN or OTP to install.</p>
+  </main>
+  <script>
+    (function () {
+      "use strict";
+      var standalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+      if (standalone) { window.location.replace("/"); return; }
+      var ua = navigator.userAgent || "";
+      var apple = /iPhone|iPad|iPod/i.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+      var android = /Android/i.test(ua);
+      document.getElementById(apple ? "ios-help" : android ? "android-help" : "default-help").hidden = false;
+      document.getElementById("install-hint").textContent = apple
+        ? "On iPhone, use Safari's Share menu to add Khula as a web app."
+        : "Your browser may offer an Install button. If not, follow the steps below.";
+      var promptEvent = null;
+      var button = document.getElementById("install-button");
+      window.addEventListener("beforeinstallprompt", function (event) {
+        event.preventDefault();
+        promptEvent = event;
+        button.hidden = false;
+      });
+      button.addEventListener("click", function () {
+        if (!promptEvent) return;
+        var currentPrompt = promptEvent;
+        promptEvent = null;
+        button.hidden = true;
+        currentPrompt.prompt();
+      });
+      window.addEventListener("appinstalled", function () {
+        document.getElementById("install-hint").textContent =
+          "Khula was added to your device. Open it from your home screen.";
+        button.hidden = true;
+      });
+    }());
+  </script>
+</body>
+</html>

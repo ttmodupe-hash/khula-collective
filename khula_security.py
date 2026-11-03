@@ -1,0 +1,252 @@
+"""Khula account security and controlled member onboarding.
+
+No default production accounts or public registration. Credentials for initial
+admin/member invitation are supplied through private environment variables.
+"""
+import hashlib
+import hmac
+import os
+import re
+import sqlite3
+from datetime import datetime, timezone, timedelta
+
+import bcrypt
+from khula_invitations import email_normalised, verify_and_use_invitation
+from khula_compliance import onboarding_gate_status, record_notice_acknowledgement, running_live
+
+
+def _is_demo_mode():
+    return os.environ.get("KHULA_DEMO_MODE") == "1"
+
+
+def hash_password(password):
+    if len(password.encode("utf-8")) < 12 or len(password.encode("utf-8")) > 72:
+        raise ValueError("Use a password between 12 and 72 UTF-8 bytes.")
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt(rounds=12)).decode("ascii")
+
+
+def _verify_password(password, stored_hash):
+    """Return (valid, optional-upgraded-hash). Legacy SHA-256 is opt-in only."""
+    if not stored_hash:
+        return False, None
+    if stored_hash.startswith(("$2a$", "$2b$", "$2y$")):
+        try:
+            return bcrypt.checkpw(password.encode("utf-8"), stored_hash.encode("ascii")), None
+        except (ValueError, TypeError):
+            return False, None
+    legacy_enabled = _is_demo_mode() or os.environ.get("KHULA_ENABLE_LEGACY_HASH_LOGIN") == "1"
+    if not legacy_enabled or not re.fullmatch(r"[0-9a-f]{64}", stored_hash):
+        return False, None
+    actual = hashlib.sha256(password.encode("utf-8")).hexdigest()
+    if not hmac.compare_digest(actual, stored_hash):
+        return False, None
+    if _is_demo_mode() and len(password) < 12:
+        return True, None
+    # Force a reset for short/weak legacy passwords; never upgrade them silently.
+    if len(password.encode("utf-8")) < 12:
+        return False, None
+    return True, hash_password(password)
+
+
+def _init_login_tracking(conn):
+    conn.execute("""CREATE TABLE IF NOT EXISTS Login_Attempts (
+        attempt_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT NOT NULL,
+        attempted_at TEXT NOT NULL
+    )""")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_login_attempts ON Login_Attempts(username, attempted_at)")
+
+
+def _record_failed_login(conn, username, now):
+    conn.execute(
+        "INSERT INTO Login_Attempts(username, attempted_at) VALUES (?,?)",
+        (username, now.isoformat()),
+    )
+
+
+def authenticate_user(db_path, username, password):
+    """Fail-closed authentication with persistent bounded password attempts.
+
+    Username or an unambiguous account email may be used. Both identifiers
+    share the same account cooldown; duplicate emails fail closed.
+    Eight failed attempts trigger a fifteen-minute per-account cooldown.
+    Also rate-limit by IP at the Railway/Cloudflare edge before broad launch.
+    """
+    if not isinstance(username, str) or not isinstance(password, str):
+        return None
+    username = username.strip().lower()
+    if not username or len(username) > 254 or not password or len(password.encode("utf-8")) > 72:
+        return None
+    now = datetime.now(timezone.utc)
+    window = (now - timedelta(minutes=15)).isoformat()
+    with sqlite3.connect(db_path, timeout=15) as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        _init_login_tracking(conn)
+        column = "email" if "@" in username else "username"
+        candidates = conn.execute(
+            "SELECT user_id,username,full_name,role,theme_preference,password_hash,is_active "
+            "FROM Users WHERE LOWER(" + column + ")=? LIMIT 2",
+            (username,),
+        ).fetchall()
+        row = candidates[0] if len(candidates) == 1 else None
+        # Alternating email and username must not bypass an account cooldown.
+        account_key = row[1].strip().lower() if row else username
+        recent_failures = conn.execute(
+            "SELECT COUNT(*) FROM Login_Attempts WHERE username IN (?,?) AND attempted_at>=?",
+            (account_key, username, window),
+        ).fetchone()[0]
+        if recent_failures >= 8:
+            return None
+        known_demo_passwords = {
+            hashlib.sha256(b"admin123").hexdigest(),
+            hashlib.sha256(b"password1").hexdigest(),
+        }
+        accepted = False
+        upgraded = None
+        if row and row[6] == 1 and (_is_demo_mode() or row[5] not in known_demo_passwords):
+            accepted, upgraded = _verify_password(password, row[5])
+        if not accepted:
+            _record_failed_login(conn, account_key, now)
+            return None
+        if upgraded:
+            conn.execute("UPDATE Users SET password_hash=? WHERE user_id=?", (upgraded, row[0]))
+        conn.execute("UPDATE Users SET last_login=? WHERE user_id=?", (now.isoformat(), row[0]))
+        conn.execute("DELETE FROM Login_Attempts WHERE username IN (?,?)", (account_key, username))
+        # Bound table growth without storing passwords, tokens, IP addresses or user PII.
+        conn.execute(
+            "DELETE FROM Login_Attempts WHERE attempted_at<?",
+            ((now - timedelta(days=1)).isoformat(),),
+        )
+        return tuple(row[:5])
+
+
+def bootstrap_admin(db_path):
+    """Create first admin only from a strong, private bootstrap credential."""
+    username = os.environ.get("KHULA_BOOTSTRAP_ADMIN_USER", "").strip().lower()
+    password = os.environ.get("KHULA_BOOTSTRAP_ADMIN_PASSWORD", "")
+    if not username or not password or not re.fullmatch(r"[a-z][a-z0-9_]{2,29}", username):
+        return False
+    if len(password.encode("utf-8")) < 12 or password in ("admin123", "password123"):
+        return False
+    with sqlite3.connect(db_path) as conn:
+        # Previously seeded demo admins must not block secure first-time setup.
+        demo_hash = hashlib.sha256(b"admin123").hexdigest()
+        existing = conn.execute(
+            "SELECT 1 FROM Users WHERE role='admin' AND is_active=1 "
+            "AND password_hash != ? LIMIT 1", (demo_hash,)
+        ).fetchone()
+        if existing:
+            return False
+        existing_user = conn.execute("SELECT 1 FROM Users WHERE username=? LIMIT 1", (username,)).fetchone()
+        if existing_user:
+            return False
+        conn.execute(
+            "INSERT INTO Users (username,password_hash,full_name,role,join_date,is_active,must_change_password) "
+            "VALUES (?,?,?,?,?,1,1)",
+            (username, hash_password(password), "Khula Administrator", "admin",
+             datetime.now(timezone.utc).isoformat()),
+        )
+    return True
+
+
+def registration_enabled():
+    # Don't collect identifiable real-member data until minimum POPIA,
+    # operator and member-governance prerequisites are signed off.
+    if _is_demo_mode():
+        return False
+    return not running_live() or onboarding_gate_status()["ready"]
+
+
+def member_auth_state(db_path, user_id):
+    with sqlite3.connect(db_path) as conn:
+        return conn.execute(
+            "SELECT role,is_active,full_name,auth_epoch,must_change_password "
+            "FROM Users WHERE user_id=?", (user_id,)
+        ).fetchone()
+
+
+def change_member_password(db_path, user_id, current_password, next_password):
+    """Verified self-service password rotation; invalidate other sessions."""
+    if not isinstance(current_password, str) or not isinstance(next_password, str):
+        raise ValueError("Invalid password input.")
+    if current_password == next_password:
+        raise ValueError("Choose a different new password.")
+    new_hash = hash_password(next_password)
+    with sqlite3.connect(db_path, timeout=15) as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        record = conn.execute(
+            "SELECT password_hash,is_active FROM Users WHERE user_id=?", (user_id,)
+        ).fetchone()
+        if not record or not record[1]:
+            raise PermissionError("Active account required.")
+        accepted, _ = _verify_password(current_password, record[0])
+        if not accepted:
+            raise ValueError("Current password is incorrect.")
+        conn.execute(
+            "UPDATE Users SET password_hash=?,auth_epoch=auth_epoch+1,"
+            "must_change_password=0 WHERE user_id=?",
+            (new_hash, user_id),
+        )
+    return True
+
+
+def register_member(
+        db_path, username, full_name, email, password, invite_code, *,
+        notice_acknowledged=False, international_transfer_acknowledged=False,
+        adult_confirmed=False, include_receipt=False):
+    """Create an inactive member using an individually issued one-time token.
+
+    The token and the account creation share the same SQLite transaction,
+    preventing simultaneous redemption or uninvited registration.
+    """
+    if running_live():
+        if not onboarding_gate_status()["ready"]:
+            raise ValueError("Real-member registration awaits the privacy and governance review.")
+        if notice_acknowledged is not True:
+            raise ValueError("Read and acknowledge the published Khula privacy notice.")
+        if international_transfer_acknowledged is not True:
+            raise ValueError("You must acknowledge the disclosed overseas data transfer.")
+        if adult_confirmed is not True:
+            raise ValueError("Club registration is for adults applying for themselves.")
+    username = str(username).strip().lower()
+    full_name = str(full_name).strip()
+    email = email_normalised(email)
+    if not re.fullmatch(r"[a-z][a-z0-9_]{2,29}", username):
+        raise ValueError("Use 3–30 letters, numbers or underscores; start with a letter.")
+    if not (3 <= len(full_name) <= 120):
+        raise ValueError("Please enter your full name.")
+    password_hash = hash_password(password)
+    with sqlite3.connect(db_path, timeout=15) as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        if conn.execute("SELECT 1 FROM Users WHERE LOWER(email)=?", (email,)).fetchone():
+            raise ValueError("An account with this email already exists.")
+        # Member ID is created before token redemption but rolled back on error.
+        try:
+            cursor = conn.execute(
+                "INSERT INTO Users (username,password_hash,full_name,email,role,join_date,is_active,fica_verified) "
+                "VALUES (?,?,?,?,'member',?,0,0)",
+                (username, password_hash, full_name, email,
+                 datetime.now(timezone.utc).isoformat()),
+            )
+        except sqlite3.IntegrityError as exc:
+            raise ValueError("That username is already in use.") from exc
+        verify_and_use_invitation(conn, email, invite_code, cursor.lastrowid)
+        if running_live():
+            record_notice_acknowledgement(conn, cursor.lastrowid)
+            # Even an email-bound invitation does NOT grant club access.
+            # Use the exact same audited human-admission queue as public signups.
+            from khula_applications import ensure_applications_schema
+            from khula_membership_receipts import issue_status_receipt
+            ensure_applications_schema(conn)
+            now = datetime.now(timezone.utc).isoformat()
+            notice_version = onboarding_gate_status()["details"]["version"]
+            application = conn.execute(
+                "INSERT INTO Membership_Applications "
+                "(user_id,source,status,submitted_at,cross_border_consent_at,notice_version) "
+                "VALUES (?,'invitation','pending',?,?,?)",
+                (cursor.lastrowid, now, now, notice_version),
+            )
+            if include_receipt is True:
+                code = issue_status_receipt(conn, application.lastrowid)
+                return {"user_id": cursor.lastrowid, "tracking_code": code}
+        return cursor.lastrowid
